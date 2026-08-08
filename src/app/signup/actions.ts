@@ -32,10 +32,15 @@ export async function signUp(
 
   const supabase = await createClient();
 
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: `${appUrl}/login`,
       data: {
         full_name: fullName,
         // Optional — an empty string would store "" rather than a real
