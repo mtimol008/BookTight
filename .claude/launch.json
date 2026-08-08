@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "booktight-dev",
+      "runtimeExecutable": "C:\\Users\\ussit\\Desktop\\booktight-app\\.claude\\dev-with-path.bat",
+      "runtimeArgs": [],
+      "port": 3000
+    }
+  ]
+}

@@ -1,0 +1,1158 @@
+/* Booktight design system.
+ *
+ * One stylesheet, driven by the tokens below — no CSS framework, no
+ * per-component files. Tune a colour or a radius here and it moves
+ * everywhere.
+ *
+ * The palette is deliberately light-only: the design commits to a cream
+ * canvas, so there is no prefers-color-scheme override. */
+
+:root {
+  --bg: #faf9f6;
+  --surface: #ffffff;
+  --accent: #e8a93a;
+  --route: #3d8c7f;
+  --warning: #c94c33;
+  --success: #3d8c6b;
+  --text: #1b1f24;
+  --muted: #6b7280;
+
+  --border: rgba(27, 31, 36, 0.1);
+  --border-strong: rgba(27, 31, 36, 0.18);
+  --tint-route: rgba(61, 140, 127, 0.08);
+  --tint-accent: rgba(232, 169, 58, 0.12);
+  --tint-warning: rgba(201, 76, 51, 0.08);
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+
+  /* The app is a phone-shaped column at every window size. */
+  --column: 430px;
+  --nav-height: 64px;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html {
+  height: 100%;
+  color-scheme: light;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+/* iOS Safari zooms the whole page when you focus a form control whose
+ * font size is under 16px. This floor stops that at the source, so the
+ * viewport meta can keep pinch-zoom available everywhere — disabling zoom
+ * would fix the symptom by taking accessibility away.
+ *
+ * Set on the elements themselves, not just our .input class, so a control
+ * added later without a class is safe by default. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------------- shell */
+
+.shell {
+  width: 100%;
+  max-width: var(--column);
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 20px 18px calc(var(--nav-height) + 28px);
+  position: relative;
+}
+
+/* Auth screens sit outside the shell — no bottom nav. */
+.shell--bare {
+  padding-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: var(--column);
+  height: var(--nav-height);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: stretch;
+  z-index: 20;
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--muted);
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: none;
+  border: none;
+}
+
+.nav-item svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nav-item.is-active {
+  color: var(--accent);
+}
+
+/* Focusing a field makes the OS put something over the bottom of the
+ * screen — the keyboard for text, a date/time picker sheet otherwise.
+ * The nav and FAB are fixed, so they'd stay pinned on top of it, which is
+ * what makes a picker look like it's colliding with the nav bar. The
+ * picker's own size is OS-controlled and can't be changed from here; this
+ * just gets our chrome out of its way.
+ *
+ * Driven by a body attribute rather than `:has(:focus)` so it also works
+ * on Safari before 15.4, and so the behaviour is actually testable. */
+body[data-field-focused="true"] .nav,
+body[data-field-focused="true"] .fab {
+  display: none;
+}
+
+/* ----------------------------------------------------------- typography */
+
+.wordmark {
+  font-family: var(--font-oswald), sans-serif;
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wordmark::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.wordmark--lg {
+  font-size: 28px;
+}
+
+.tagline {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.screen-title {
+  font-family: var(--font-oswald), sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.section-label {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field-label {
+  display: block;
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.text-route {
+  color: var(--route);
+}
+.text-warning {
+  color: var(--warning);
+}
+
+.error-text {
+  color: var(--warning);
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.version {
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  margin-top: 28px;
+}
+
+/* ---------------------------------------------------------------- cards */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.card + .card {
+  margin-top: 12px;
+}
+
+/* --------------------------------------------------------- summary rows */
+/* A tappable row inside a .card — icon, label + value, chevron. Used by
+   the Account overview to link into each section's edit screen. */
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 2px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+}
+
+.summary-row:first-child {
+  padding-top: 4px;
+}
+
+.summary-row:last-child {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+
+.summary-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: var(--tint-accent);
+  color: var(--accent);
+}
+
+/* min-width: 0 lets this flex item shrink below its content's natural
+   width — without it the long address forces the row wider than the card
+   and no amount of ellipsis config would ever kick in. */
+.summary-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Both of these are <span>s, so they must be blockified: overflow,
+   text-overflow and margin are all ignored on inline boxes, which is what
+   let a long address spill past the card's right edge. */
+.summary-row-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.summary-row-value {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 1px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-row-chevron {
+  color: var(--muted);
+  flex-shrink: 0;
+  display: inline-flex;
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------------ account header */
+
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--tint-accent);
+  color: var(--accent);
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.account-header-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Blockified for the same reason as the summary rows: these are <span>s,
+   and ellipsis truncation never applies to an inline box. */
+.account-header-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-header-business {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.screen-head--center {
+  justify-content: center;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.back-link {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  display: inline-flex;
+  padding: 4px;
+}
+
+/* --------------------------------------------------------------- banner */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: var(--tint-warning);
+  border-left: 3px solid var(--warning);
+}
+
+.banner-title {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
+.banner-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* -------------------------------------------------------------- buttons */
+
+.btn {
+  font-family: var(--font-inter), sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  padding: 11px 16px;
+  background: var(--surface);
+  color: var(--text);
+  transition: filter 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--text);
+}
+
+.btn--warning {
+  background: var(--warning);
+  color: #fff;
+}
+
+.btn--outline {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.btn--block {
+  display: block;
+  width: 100%;
+}
+
+.btn--sm {
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.btn--pill {
+  border-radius: var(--radius-pill);
+}
+
+.btn--link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--route);
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.btn--quiet {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-row > * {
+  flex: 1;
+}
+
+.fab {
+  position: fixed;
+  bottom: calc(var(--nav-height) + 16px);
+  left: 50%;
+  /* Anchored to the right edge of the column, not a fixed offset — on a
+     viewport narrower than the column the two differ, and a fixed offset
+     pushes the button off-screen. */
+  margin-left: calc(min(var(--column), 100vw) / 2 - 68px);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--text);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(27, 31, 36, 0.18);
+  z-index: 21;
+}
+
+/* ---------------------------------------------------------------- forms */
+
+.field {
+  margin-bottom: 16px;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  max-width: 100%;
+  /* Flex items default to min-width:auto, which refuses to shrink below
+   * the content's natural size — a native <input type="date"> or
+   * type="time"> has its own intrinsic rendered width that mobile Safari
+   * won't compress to fit a percentage width inside a flex container
+   * otherwise, overflowing past width:100%. Harmless outside flex. */
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-family: var(--font-inter), sans-serif;
+  /* Must stay >= 16px — see the iOS zoom note in the base rules above. */
+  font-size: 16px;
+  color: var(--text);
+}
+
+.input,
+.select {
+  /* A fixed box, not one padding+content derives. A native date/time
+   * control's internal rendering can otherwise size itself differently
+   * once it holds a real value vs nothing — visible as the field growing
+   * the moment a date is picked. Height is a flat constant instead of
+   * relying on content to imply it, so empty and filled are identical.
+   * .textarea is excluded — it's deliberately tall and resizable. */
+  height: 44px;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--muted);
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.input--time {
+  width: auto;
+  font-family: var(--font-mono), monospace;
+}
+
+.autocomplete {
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.autocomplete-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover {
+  background: var(--tint-accent);
+}
+
+.autocomplete-item svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.chip.is-selected {
+  background: var(--text);
+  border-color: var(--text);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------- day / route */
+
+.day-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* A subtle wash on the header only (not the whole card, which would make
+   a fully-reviewed day look too different from the rest of the week at a
+   glance) once every job on the day is completed. */
+.day-card-head.is-complete {
+  background: var(--tint-route);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: -8px -10px 0;
+}
+
+.day-title {
+  font-family: var(--font-oswald), sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.day-stops {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.day-distance {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  color: var(--route);
+  margin-top: 2px;
+}
+
+.timeline {
+  position: relative;
+  margin-top: 14px;
+  padding-left: 30px;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: rgba(61, 140, 127, 0.22);
+}
+
+/* Marks where one time-of-day zone's stops end and the next begins within
+   the timeline's real driving order — a display grouping layered on top of
+   that order, not a replacement for it, so it can appear more than once in
+   a day if a specific-time job interrupts a run of the same slot. */
+.timeline-section-header {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 0 4px;
+}
+
+.timeline-section-header:first-child {
+  padding-top: 0;
+}
+
+.stop {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+}
+
+.stop-dot {
+  position: absolute;
+  left: -30px;
+  top: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--route);
+  color: #fff;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stop-dot--endpoint {
+  background: var(--surface);
+  border: 2px solid rgba(61, 140, 127, 0.45);
+  width: 20px;
+  height: 20px;
+}
+
+.stop-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.stop-time {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.stop-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.stop-address {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.stop-leg {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+.stop-drag-handle {
+  background: none;
+  border: none;
+  padding: 6px 2px 6px 8px;
+  margin: -6px -2px -6px 0;
+  color: var(--muted);
+  align-self: center;
+  touch-action: none;
+  cursor: grab;
+}
+
+.stop.is-drop-target,
+.timeline-section-header.is-drop-target {
+  outline: 2px dashed var(--route);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--tint-route);
+}
+
+.stop-endpoint-label {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stop.is-done .stop-name,
+.stop.is-done .stop-address {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.stop.is-tappable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.stop.is-tappable:hover {
+  background: var(--tint-accent);
+}
+
+/* --------------------------------------------------- suggestion surface */
+
+.suggest {
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-top: 14px;
+  background: var(--tint-route);
+  border: 1px solid rgba(61, 140, 127, 0.22);
+}
+
+.suggest--accent {
+  background: var(--tint-accent);
+  border-color: rgba(232, 169, 58, 0.35);
+}
+
+.suggest--warn {
+  background: var(--tint-warning);
+  border-color: rgba(201, 76, 51, 0.28);
+}
+
+.suggest-label {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--route);
+}
+
+.suggest--accent .suggest-label {
+  color: #96701c;
+}
+
+.suggest--warn .suggest-label {
+  color: var(--warning);
+}
+
+.suggest-headline {
+  font-family: var(--font-oswald), sans-serif;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 4px 0 6px;
+}
+
+.suggest-body {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.suggest-meta {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.suggest-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+
+/* Same reasoning as .input's min-width:0 above, but for the flex items
+ * themselves (the wrapper divs around each field) — without this, the
+ * wrapper won't shrink to the card's width even once its child can. */
+.suggest-actions > * {
+  min-width: 0;
+}
+
+/* Overlay placeholder for a native date/time input: `placeholder` is
+ * ignored on these input types by every browser, so an empty field would
+ * otherwise show nothing. Shown only while empty (conditionally rendered
+ * in JSX) and `pointer-events: none` so taps still reach the real input
+ * underneath — the picker still opens on the first tap. */
+.input-wrap {
+  position: relative;
+  /* Belt-and-suspenders: iOS Safari's native <input type="date"/"time">
+   * control can render its internal fields at a width wider than the CSS
+   * box computes, independent of width:100% — a documented WebKit quirk,
+   * not something min-width:0 alone resolves (confirmed: that alone
+   * wasn't enough here). This clips anything the control tries to render
+   * past its box, so it's physically impossible for it to escape the
+   * card regardless of what WebKit does internally. */
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.input-placeholder {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  bottom: 1px;
+  /* Stops short of the full width (unlike inset: 1px, which covered the
+   * whole box) so the native calendar icon — which renders flush against
+   * the input's right edge — stays visible underneath instead of being
+   * painted over by this overlay. Same background as .input, so there's
+   * no visible seam where the overlay ends and the real input shows
+   * through. */
+  right: 36px;
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  border-radius: calc(var(--radius-sm) - 1px);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 16px;
+  pointer-events: none;
+}
+
+/* The other half of the fix: strip iOS's native chrome on date/time
+ * fields, which is the fix specifically documented for this control
+ * rendering wider than its box on WebKit (as opposed to the general
+ * flexbox min-width:auto issue, which turned out not to be the cause).
+ * Behavior is unaffected — tapping still opens the native picker; only
+ * the default visual chrome is removed, which our own .input styling
+ * (border, padding, focus ring) already replaces. */
+.input-wrap .input {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.badge {
+  display: inline-block;
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--tint-warning);
+  color: var(--warning);
+  margin-left: 6px;
+}
+
+.badge--success {
+  background: var(--tint-route);
+  color: var(--success);
+}
+
+.warn-block {
+  background: var(--tint-warning);
+  border: 1px solid rgba(201, 76, 51, 0.28);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.warn-block p + p {
+  margin-top: 6px;
+}
+
+/* --------------------------------------------------------------- review */
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.check-row.is-checked {
+  background: var(--tint-route);
+  border-color: rgba(61, 140, 127, 0.4);
+}
+
+.check-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.check-row.is-checked .check-box {
+  background: var(--route);
+  border-color: var(--route);
+}
+
+.decision-card {
+  background: var(--tint-warning);
+  border: 1px solid rgba(201, 76, 51, 0.25);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+/* --------------------------------------------------------------- month */
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.month-title {
+  font-family: var(--font-oswald), sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.month-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.month-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.month-weekday {
+  text-align: center;
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 6px;
+}
+
+.month-cell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.month-cell--empty {
+  background: none;
+  border: none;
+}
+
+.month-cell--today {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.month-cell--selected {
+  background: var(--text);
+  border-color: var(--text);
+  color: #fff;
+}
+
+.month-cell-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(61, 140, 127, 0.45);
+}
+
+.month-cell-dot--packed {
+  width: 6px;
+  height: 6px;
+  background: var(--route);
+}
+
+.month-cell--selected .month-cell-dot,
+.month-cell--selected .month-cell-dot--packed {
+  background: #fff;
+}
+
+/* ---------------------------------------------------------------- misc */
+
+.empty {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 32px 12px;
+}
+
+.stack > * + * {
+  margin-top: 12px;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
