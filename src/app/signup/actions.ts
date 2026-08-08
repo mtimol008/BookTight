@@ -40,7 +40,7 @@ export async function signUp(
     email,
     password,
     options: {
-      emailRedirectTo: `${appUrl}/login`,
+      emailRedirectTo: `${appUrl}/email-confirmed`,
       data: {
         full_name: fullName,
         // Optional — an empty string would store "" rather than a real
