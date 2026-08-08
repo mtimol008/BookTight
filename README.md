@@ -29,8 +29,35 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This app is ready to deploy on Vercel or any platform that supports Next.js App Router.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Environment variables
+
+Copy `.env.local.example` to `.env.local` and fill in your values:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (server-only, not exposed to the browser)
+- `MAPBOX_ACCESS_TOKEN`
+
+### Build locally
+
+```bash
+npm install
+npm run build
+```
+
+### Deploy on Vercel
+
+The easiest way to publish is to connect this GitHub repository to Vercel and let Vercel detect the Next.js app.
+
+If you prefer a direct deploy from this codebase, install the Vercel CLI and run:
+
+```bash
+npm install -g vercel
+vercel
+```
+
+Need help with the deploy settings or environment variables? Ask me and I can make them exact for your project.
