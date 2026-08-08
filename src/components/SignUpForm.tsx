@@ -12,6 +12,10 @@ export function SignUpForm() {
   const [state, formAction, isPending] = useActionState(signUp, initialState);
 
   const [homeAddress, setHomeAddress] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,15 +93,56 @@ export function SignUpForm() {
         <label className="field-label" htmlFor="signup-password">
           Password
         </label>
-        <input
-          id="signup-password"
-          className="input"
-          type="password"
-          name="password"
-          placeholder="At least 6 characters"
-          required
-          minLength={6}
-        />
+        <div className="input-wrap">
+          <input
+            id="signup-password"
+            className="input"
+            type={showPassword ? "text" : "password"}
+            name="password"
+            placeholder="At least 6 characters"
+            autoComplete="new-password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button
+            type="button"
+            className="input-toggle"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            onClick={() => setShowPassword((current) => !current)}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
+      </div>
+
+      <div className="field">
+        <label className="field-label" htmlFor="signup-confirm-password">
+          Confirm password
+        </label>
+        <div className="input-wrap">
+          <input
+            id="signup-confirm-password"
+            className="input"
+            type={showConfirmPassword ? "text" : "password"}
+            name="confirmPassword"
+            placeholder="Repeat your password"
+            autoComplete="new-password"
+            required
+            minLength={6}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+          <button
+            type="button"
+            className="input-toggle"
+            aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+            onClick={() => setShowConfirmPassword((current) => !current)}
+          >
+            {showConfirmPassword ? "Hide" : "Show"}
+          </button>
+        </div>
       </div>
 
       <div className="field">
@@ -138,6 +183,9 @@ export function SignUpForm() {
         )}
       </div>
 
+      {confirmPassword && password !== confirmPassword && (
+        <p className="error-text">Passwords do not match.</p>
+      )}
       {state.error && <p className="error-text">{state.error}</p>}
       {state.message && (
         <p className="error-text" style={{ color: "var(--success)" }}>

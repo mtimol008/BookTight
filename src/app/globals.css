@@ -962,6 +962,25 @@ body[data-field-focused="true"] .fab {
 .input-wrap .input {
   -webkit-appearance: none;
   appearance: none;
+  padding-right: 94px;
+}
+
+.input-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-inter), sans-serif;
+  font-size: 13px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.input-toggle:hover {
+  color: var(--text);
 }
 
 .badge {

@@ -17,10 +17,15 @@ export async function signUp(
   const businessName = formData.get("businessName")?.toString().trim() ?? "";
   const email = formData.get("email")?.toString().trim() ?? "";
   const password = formData.get("password")?.toString() ?? "";
+  const confirmPassword = formData.get("confirmPassword")?.toString() ?? "";
   const homeAddress = formData.get("homeAddress")?.toString().trim() ?? "";
-
-  if (!fullName || !email || !password || !homeAddress) {
-    return { error: "Full name, email, password, and home address are all required." };
+ 
+  if (!fullName || !email || !password || !confirmPassword || !homeAddress) {
+    return { error: "Full name, email, password, confirmation, and home address are all required." };
+  }
+ 
+  if (password !== confirmPassword) {
+    return { error: "Passwords do not match." };
   }
 
   const geocoded = await geocodeAddress(homeAddress);
