@@ -8,7 +8,7 @@ alter table public.profiles add column if not exists distance_unit text not null
 
 update public.profiles set distance_unit = 'km' where distance_unit is null;
 
-alter table public.profiles add constraint if not exists profiles_distance_unit_check check (distance_unit in ('km', 'mi'));
+alter table public.profiles add constraint profiles_distance_unit_check check (distance_unit in ('km', 'mi'));
 
 create or replace function public.handle_new_user()
 returns trigger
