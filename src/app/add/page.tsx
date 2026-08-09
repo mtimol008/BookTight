@@ -2,8 +2,10 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { BackIcon } from "@/components/icons";
 import { NewJobForm } from "@/components/NewJobForm";
+import { getCurrentProfile } from "@/lib/profiles";
 
-export default function AddJobPage() {
+export default async function AddJobPage() {
+  const profile = await getCurrentProfile();
   return (
     <AppShell>
       <div className="screen-head screen-head--center">
@@ -12,8 +14,8 @@ export default function AddJobPage() {
         </Link>
         <h1 className="screen-title">Add a Job</h1>
       </div>
-
-      <NewJobForm />
+ 
+      <NewJobForm distanceUnit={profile?.distance_unit ?? "km"} />
     </AppShell>
   );
 }

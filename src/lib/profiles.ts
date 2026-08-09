@@ -1,4 +1,5 @@
 import { createClient } from "./supabase/server";
+import type { DistanceUnit } from "./format";
 
 export interface ProfileRecord {
   id: string;
@@ -11,6 +12,7 @@ export interface ProfileRecord {
   working_hours_start: string;
   working_hours_end: string;
   max_travel_range_km: number;
+  distance_unit: DistanceUnit;
   /** null = no cap. */
   max_jobs_per_day: number | null;
   /** null = onboarding not completed yet; gates the "/" screen. */

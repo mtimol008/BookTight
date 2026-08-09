@@ -7,12 +7,12 @@ import {
   type SuggestionResult,
   type TimeSuggestion,
 } from "@/app/actions";
-import { formatSuggestionDate } from "@/lib/format";
+import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import { ASSUMED_JOB_DURATION_MINUTES, type DayRoute, type TimeSlotType } from "@/lib/scheduling";
 
-function dayDetailLine(day: DayRoute): string {
+function dayDetailLine(day: DayRoute, unit: DistanceUnit): string {
   const jobLabel = `${day.jobCount} job${day.jobCount === 1 ? "" : "s"}`;
-  return `${jobLabel} booked · adds ${day.addedDistanceKm.toFixed(1)} km · day route ${day.totalDistanceKm.toFixed(1)} km`;
+  return `${jobLabel} booked · adds ${formatDistance(day.addedDistanceKm, unit)} · day route ${formatDistance(day.totalDistanceKm, unit)}`;
 }
 
 // Outside this range the "Nx further" comparison stops being informative:
@@ -41,6 +41,7 @@ export interface DaySuggestionPanelProps {
   /** The job being moved — excluded from on-demand route lookups so the
    *  engine never routes around the job it's relocating. */
   jobId: string;
+  distanceUnit?: DistanceUnit;
   /** The time the suggestion was computed for, and the fallback used when
    *  the suggested time isn't adopted. */
   requestedTime: { type: TimeSlotType; specificTime: string };
@@ -88,6 +89,7 @@ export function DaySuggestionPanel({
   timeControl,
   isSaving,
   onConfirm,
+  distanceUnit,
 }: DaySuggestionPanelProps) {
   const [selectedDate, setSelectedDateRaw] = useState(
     currentDate ?? suggestion.suggestion.day.date
@@ -113,7 +115,8 @@ export function DaySuggestionPanel({
 
   const [isCheckingCustomDate, startCheckingCustomDate] = useTransition();
   const [isCheckingTimeSuggestion, startCheckingTimeSuggestion] = useTransition();
-
+  const unit = distanceUnit ?? suggestion.distanceUnit ?? "km";
+ 
   // The time this panel is placing, in the shape the actions expect.
   const panelRequestedTime = {
     type: requestedTime.type,
@@ -415,7 +418,7 @@ export function DaySuggestionPanel({
 
       {shownDay && (
         <div className="suggest-meta">
-          {dayDetailLine(shownDay)}
+          {dayDetailLine(shownDay, unit)}
           {shownDay.timeOption && !shownDay.timeOption.fits && (
             <span className="badge">No free time</span>
           )}
@@ -524,7 +527,7 @@ export function DaySuggestionPanel({
         <div className="warn-block">
           {warningDay.addedDistanceKm > suggestion.maxTravelRangeKm && (
             <p>
-              This adds {warningDay.addedDistanceKm.toFixed(1)} km of extra driving on{" "}
+              This adds {formatDistance(warningDay.addedDistanceKm, unit)} of extra driving on{" "}
               {warningDay.date}
               {warningComparison && <> — {warningComparison}</>}.
             </p>

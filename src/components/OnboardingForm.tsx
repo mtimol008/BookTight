@@ -2,6 +2,7 @@
 
 import { useState, useActionState, type FormEvent } from "react";
 import { completeOnboarding, type OnboardingFormState } from "@/app/onboarding/actions";
+import { distanceKmToUnit, type DistanceUnit } from "@/lib/format";
 import type { ProfileRecord } from "@/lib/profiles";
 
 const initialState: OnboardingFormState = {};
@@ -14,6 +15,11 @@ export function OnboardingForm({ profile }: { profile: ProfileRecord }) {
   );
   const [workingHoursEnd, setWorkingHoursEnd] = useState(
     profile.working_hours_end.slice(0, 5)
+  );
+  const initialDistanceUnit = profile.distance_unit ?? "km";
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>(initialDistanceUnit);
+  const [maxTravelRange, setMaxTravelRange] = useState(
+    distanceKmToUnit(profile.max_travel_range_km, initialDistanceUnit).toFixed(1)
   );
   const [clientError, setClientError] = useState<string | null>(null);
 
@@ -54,8 +60,33 @@ export function OnboardingForm({ profile }: { profile: ProfileRecord }) {
       </div>
 
       <div className="field">
+        <label className="field-label" htmlFor="onboarding-distance-unit">
+          Distance units
+        </label>
+        <select
+          id="onboarding-distance-unit"
+          className="input"
+          name="distanceUnit"
+          value={distanceUnit}
+          onChange={(e) => {
+            const nextUnit = e.target.value as DistanceUnit;
+            setDistanceUnit(nextUnit);
+            const numericValue = Number(maxTravelRange);
+            if (Number.isFinite(numericValue)) {
+              const currentKm =
+                distanceUnit === "mi" ? numericValue / 0.621371 : numericValue;
+              setMaxTravelRange(distanceKmToUnit(currentKm, nextUnit).toFixed(1));
+            }
+          }}
+        >
+          <option value="km">Kilometers (km)</option>
+          <option value="mi">Miles (mi)</option>
+        </select>
+      </div>
+
+      <div className="field">
         <label className="field-label" htmlFor="onboarding-max-travel">
-          Max travel range (km)
+          Max travel range ({distanceUnit})
         </label>
         <input
           id="onboarding-max-travel"
@@ -64,8 +95,9 @@ export function OnboardingForm({ profile }: { profile: ProfileRecord }) {
           name="maxTravelRangeKm"
           required
           min={1}
-          step="1"
-          defaultValue={profile.max_travel_range_km}
+          step="0.1"
+          value={maxTravelRange}
+          onChange={(e) => setMaxTravelRange(e.target.value)}
         />
         <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
           How far a job can add to a day's driving before it's no longer

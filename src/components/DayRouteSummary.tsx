@@ -1,4 +1,4 @@
-import { formatSuggestionDate } from "@/lib/format";
+import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import type { JobRecord } from "@/lib/jobs";
 import type { TimeSlotType } from "@/lib/scheduling";
 
@@ -17,8 +17,8 @@ function jobTimeLabel(job: JobRecord): string {
     : TIME_SLOT_LABELS[job.time_slot_type as TimeSlotType] ?? job.time_slot_type;
 }
 
-function formatKm(distanceKm: number | null): string {
-  return distanceKm === null ? "" : `${distanceKm.toFixed(1)} km`;
+function formatDistanceForUnit(distanceKm: number | null, unit: DistanceUnit): string {
+  return formatDistance(distanceKm, unit);
 }
 
 export interface DayRouteSummaryStop {
@@ -41,11 +41,13 @@ export function DayRouteSummary({
   stops,
   returnHomeKm,
   totalDistanceKm,
+  distanceUnit,
 }: {
   date: string;
   stops: DayRouteSummaryStop[];
   returnHomeKm: number | null;
   totalDistanceKm: number | null;
+  distanceUnit: DistanceUnit;
 }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -56,7 +58,9 @@ export function DayRouteSummary({
         </span>
       </div>
       {totalDistanceKm !== null && (
-        <div className="day-distance">{formatKm(totalDistanceKm)} round trip</div>
+        <div className="day-distance">
+          {formatDistanceForUnit(totalDistanceKm, distanceUnit)} round trip
+        </div>
       )}
 
       {stops.length === 0 ? (
@@ -83,7 +87,9 @@ export function DayRouteSummary({
                   <div className="stop-name">{stop.job.customer_name}</div>
                   <div className="stop-address">{stop.job.address}</div>
                 </div>
-                <div className="stop-leg">{formatKm(stop.distanceFromPreviousKm)}</div>
+                <div className="stop-leg">
+                  {formatDistanceForUnit(stop.distanceFromPreviousKm, distanceUnit)}
+                </div>
               </div>
             );
           })}
@@ -94,7 +100,9 @@ export function DayRouteSummary({
               <div className="stop-endpoint-label">End</div>
               <div className="stop-name">Home</div>
             </div>
-            <div className="stop-leg">{formatKm(returnHomeKm)}</div>
+            <div className="stop-leg">
+              {formatDistanceForUnit(returnHomeKm, distanceUnit)}
+            </div>
           </div>
         </div>
       )}

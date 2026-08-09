@@ -3,11 +3,21 @@
 // and onboarding, which both write the same four profile columns and must
 // enforce the same rules the DB check constraints already enforce.
 
+import type { DistanceUnit } from "./format";
+
 export interface BusinessRulesInput {
   workingHoursStart: string;
   workingHoursEnd: string;
+  distanceUnit: DistanceUnit;
   maxTravelRangeKm: number;
   maxJobsPerDay: number | null;
+}
+
+function distanceUnitFromRaw(raw: string | null): DistanceUnit {
+  if (raw === "mi") {
+    return "mi";
+  }
+  return "km";
 }
 
 export function validateBusinessRules(
@@ -15,10 +25,13 @@ export function validateBusinessRules(
 ): { error: string } | { value: BusinessRulesInput } {
   const workingHoursStart = formData.get("workingHoursStart")?.toString() ?? "";
   const workingHoursEnd = formData.get("workingHoursEnd")?.toString() ?? "";
-  const maxTravelRangeKmRaw = formData.get("maxTravelRangeKm")?.toString().trim() ?? "";
+  const distanceUnit = distanceUnitFromRaw(
+    formData.get("distanceUnit")?.toString() ?? null
+  );
+  const maxTravelRangeRaw = formData.get("maxTravelRangeKm")?.toString().trim() ?? "";
   const maxJobsPerDayRaw = formData.get("maxJobsPerDay")?.toString().trim() ?? "";
 
-  if (!workingHoursStart || !workingHoursEnd || !maxTravelRangeKmRaw) {
+  if (!workingHoursStart || !workingHoursEnd || !maxTravelRangeRaw) {
     return { error: "Working hours and max travel range are all required." };
   }
 
@@ -28,18 +41,32 @@ export function validateBusinessRules(
     return { error: "Working hours end must be after the start." };
   }
 
-  const maxTravelRangeKm = Number(maxTravelRangeKmRaw);
-  if (!Number.isFinite(maxTravelRangeKm) || maxTravelRangeKm <= 0) {
+  const maxTravelRange = Number(maxTravelRangeRaw);
+  if (!Number.isFinite(maxTravelRange) || maxTravelRange <= 0) {
     return { error: "Max travel range must be a positive number." };
   }
+
+  const maxTravelRangeKm =
+    distanceUnit === "mi" ? maxTravelRange / 0.621371 : maxTravelRange;
 
   let maxJobsPerDay: number | null = null;
   if (maxJobsPerDayRaw) {
     maxJobsPerDay = Number(maxJobsPerDayRaw);
     if (!Number.isInteger(maxJobsPerDay) || maxJobsPerDay <= 0) {
-      return { error: "Max jobs per day must be a positive whole number, or left blank for no cap." };
+      return {
+        error:
+          "Max jobs per day must be a positive whole number, or left blank for no cap.",
+      };
     }
   }
 
-  return { value: { workingHoursStart, workingHoursEnd, maxTravelRangeKm, maxJobsPerDay } };
+  return {
+    value: {
+      workingHoursStart,
+      workingHoursEnd,
+      distanceUnit,
+      maxTravelRangeKm,
+      maxJobsPerDay,
+    },
+  };
 }

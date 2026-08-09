@@ -137,7 +137,7 @@ export default async function Home() {
       )}
 
       <div style={{ marginTop: 16 }}>
-        <JobsTableClient days={days} />
+        <JobsTableClient days={days} distanceUnit={profile?.distance_unit ?? "km"} />
       </div>
       <Link href="/add" className="fab" aria-label="Add a job">
         <PlusIcon />

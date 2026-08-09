@@ -47,6 +47,24 @@ export function formatDayTitle(isoDate: string): string {
   return `${MONTHS[date.getMonth()].toUpperCase()} ${date.getDate()}`;
 }
 
+export type DistanceUnit = "km" | "mi";
+const MILES_PER_KILOMETER = 0.621371;
+
+export function distanceKmToUnit(distanceKm: number, unit: DistanceUnit): number {
+  return unit === "mi" ? distanceKm * MILES_PER_KILOMETER : distanceKm;
+}
+
+export function formatDistance(
+  distanceKm: number | null,
+  unit: DistanceUnit = "km"
+): string {
+  if (distanceKm === null) {
+    return "";
+  }
+  const value = distanceKmToUnit(distanceKm, unit);
+  return `${value.toFixed(1)} ${unit}`;
+}
+
 /** "2026-08-03" -> "Mon, Aug 3", used in suggestion headlines. */
 export function formatSuggestionDate(isoDate: string): string {
   const date = parseLocalDate(isoDate);

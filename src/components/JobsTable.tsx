@@ -15,7 +15,7 @@ import {
 } from "@/app/actions";
 import { DaySuggestionPanel, type TimeSelection } from "@/components/DaySuggestionPanel";
 import { DragHandleIcon, PinIcon } from "@/components/icons";
-import { formatDayHeading } from "@/lib/format";
+import { formatDayHeading, formatDistance, type DistanceUnit } from "@/lib/format";
 import type { AddressSuggestion } from "@/lib/geocoding";
 import type { JobRecord } from "@/lib/jobs";
 import {
@@ -66,8 +66,8 @@ export interface DayPlan {
   totalDistanceKm: number | null;
 }
 
-function formatKm(distanceKm: number | null): string {
-  return distanceKm === null ? "" : `${distanceKm.toFixed(1)} km`;
+function formatDistanceForUnit(distanceKm: number | null, unit: DistanceUnit): string {
+  return formatDistance(distanceKm, unit);
 }
 
 /** Draggable + droppable section header — the target for a cross-section
@@ -100,11 +100,13 @@ function TimelineStop({
   job,
   stopNumber,
   distanceFromPreviousKm,
+  distanceUnit,
   onTap,
 }: {
   job: JobRecord;
   stopNumber: number;
   distanceFromPreviousKm: number | null;
+  distanceUnit: DistanceUnit;
   onTap: () => void;
 }) {
   const section = sectionOf(job);
@@ -149,7 +151,7 @@ function TimelineStop({
         <div className="stop-name">{job.customer_name}</div>
         <div className="stop-address">{job.address}</div>
       </div>
-      <div className="stop-leg">{formatKm(distanceFromPreviousKm)}</div>
+      <div className="stop-leg">{formatDistanceForUnit(distanceFromPreviousKm, distanceUnit)}</div>
       {isDraggable && (
         <button
           type="button"
@@ -183,7 +185,13 @@ interface ReorderWarning {
   impact: ManualOrderComparison;
 }
 
-export function JobsTable({ days }: { days: DayPlan[] }) {
+export function JobsTable({
+  days,
+  distanceUnit,
+}: {
+  days: DayPlan[];
+  distanceUnit: DistanceUnit;
+}) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<EditValues | null>(null);
@@ -551,9 +559,9 @@ export function JobsTable({ days }: { days: DayPlan[] }) {
       {reorderWarning && (
         <div className="warn-block">
           <p>
-            This order adds ~{reorderWarning.impact.deltaKm.toFixed(1)} km more than the most
-            efficient arrangement ({reorderWarning.impact.algorithmicKm.toFixed(1)} km vs{" "}
-            {reorderWarning.impact.manualKm.toFixed(1)} km).
+            This order adds ~{formatDistanceForUnit(reorderWarning.impact.deltaKm, distanceUnit)} more than the most
+            efficient arrangement ({formatDistanceForUnit(reorderWarning.impact.algorithmicKm, distanceUnit)} vs{" "}
+            {formatDistanceForUnit(reorderWarning.impact.manualKm, distanceUnit)}).
           </p>
           <div className="btn-row" style={{ marginTop: 10 }}>
             <button
@@ -602,7 +610,7 @@ export function JobsTable({ days }: { days: DayPlan[] }) {
             </div>
             {day.totalDistanceKm !== null && (
               <div className="day-distance">
-                {formatKm(day.totalDistanceKm)} round trip
+                {formatDistanceForUnit(day.totalDistanceKm, distanceUnit)} round trip
               </div>
             )}
 
@@ -653,6 +661,7 @@ export function JobsTable({ days }: { days: DayPlan[] }) {
                           <DaySuggestionPanel
                             suggestion={daySuggestion}
                             jobId={job.id}
+                            distanceUnit={distanceUnit}
                             requestedTime={{
                               type: editValues.timeSlotType,
                               specificTime: editValues.specificTime,
@@ -874,6 +883,7 @@ export function JobsTable({ days }: { days: DayPlan[] }) {
                       job={job}
                       stopNumber={stopNumber}
                       distanceFromPreviousKm={stop.distanceFromPreviousKm}
+                      distanceUnit={distanceUnit}
                       onTap={() => startEditing(job)}
                     />,
                   ];
@@ -886,7 +896,7 @@ export function JobsTable({ days }: { days: DayPlan[] }) {
                     <div className="stop-endpoint-label">End</div>
                     <div className="stop-name">Home</div>
                   </div>
-                  <div className="stop-leg">{formatKm(day.returnHomeKm)}</div>
+                  <div className="stop-leg">{formatDistanceForUnit(day.returnHomeKm, distanceUnit)}</div>
                 </div>
               </div>
               </DndContext>

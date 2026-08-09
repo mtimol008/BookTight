@@ -28,6 +28,7 @@ import {
   type SchedulingPreferences,
   type TimeSlotType,
 } from "@/lib/scheduling";
+import { formatDistance, type DistanceUnit } from "@/lib/format";
 import { getCurrentWeekDates, getCurrentWeekRange, getTodayDateString } from "@/lib/week";
 import { revalidatePath } from "next/cache";
 
@@ -61,6 +62,7 @@ export interface SuggestionResult {
    *  settings, not part of any one day's computed route. */
   maxTravelRangeKm: number;
   maxJobsPerDay: number | null;
+  distanceUnit: DistanceUnit;
 }
 
 /** The profile's stored HH:MM working-hours strings and km/count settings,
@@ -98,10 +100,17 @@ function neighborTimeLabel(neighbor: RouteNeighbor): string {
   return "flexible-time";
 }
 
-function describeNeighbor(neighbor: RouteNeighbor, weekJobs: JobRecord[]): string {
+function describeNeighbor(
+  neighbor: RouteNeighbor,
+  weekJobs: JobRecord[],
+  distanceUnit: DistanceUnit
+): string {
   const job = weekJobs.find((j) => j.id === neighbor.jobId);
   const addressLabel = job ? shortAddressLabel(job.address) : "another job";
-  return `your ${neighborTimeLabel(neighbor)} job at ${addressLabel} (${neighbor.distanceKm.toFixed(1)} km away)`;
+  return `your ${neighborTimeLabel(neighbor)} job at ${addressLabel} (${formatDistance(
+    neighbor.distanceKm,
+    distanceUnit
+  )} away)`;
 }
 
 function namedSlotLabel(slot: string): string {
@@ -132,7 +141,11 @@ function listSlots(slots: string[]): string {
  * reachable from the test script) — this function only decides how to say
  * it, since it's the layer that has the job addresses.
  */
-function buildTimeSuggestion(day: DayRoute, weekJobs: JobRecord[]): TimeSuggestion {
+function buildTimeSuggestion(
+  day: DayRoute,
+  weekJobs: JobRecord[],
+  distanceUnit: DistanceUnit
+): TimeSuggestion {
   const option = day.timeOption;
   if (!option) {
     return {
@@ -187,10 +200,10 @@ function buildTimeSuggestion(day: DayRoute, weekJobs: JobRecord[]): TimeSuggesti
 
   const placement =
     hasPrevious && hasNext
-      ? `Fits between ${describeNeighbor(previousNeighbor, weekJobs)} and ${describeNeighbor(nextNeighbor, weekJobs)}.`
+      ? `Fits between ${describeNeighbor(previousNeighbor, weekJobs, distanceUnit)} and ${describeNeighbor(nextNeighbor, weekJobs, distanceUnit)}.`
       : hasPrevious
-        ? `After ${describeNeighbor(previousNeighbor, weekJobs)} — last job of the day.`
-        : `Before ${describeNeighbor(nextNeighbor, weekJobs)} — first job of the day.`;
+        ? `After ${describeNeighbor(previousNeighbor, weekJobs, distanceUnit)} — last job of the day.`
+        : `Before ${describeNeighbor(nextNeighbor, weekJobs, distanceUnit)} — first job of the day.`;
 
   if (option.startMinutes !== null) {
     const earliest = formatMinutesAsClock(Math.round(option.earliestStartMinutes));
@@ -228,10 +241,11 @@ function buildTimeSuggestion(day: DayRoute, weekJobs: JobRecord[]): TimeSuggesti
 function buildTimeVerdict(
   requestedTime: RequestedTime,
   day: DayRoute,
-  weekJobs: JobRecord[]
+  weekJobs: JobRecord[],
+  distanceUnit: DistanceUnit
 ): TimeSuggestion | null {
   if (requestedTime.type === "none") {
-    return buildTimeSuggestion(day, weekJobs);
+    return buildTimeSuggestion(day, weekJobs, distanceUnit);
   }
 
   if (isNamedSlot(requestedTime.type)) {
@@ -323,7 +337,12 @@ export async function getSchedulingSuggestion(
     }
   }
 
-  const timeSuggestion = buildTimeVerdict(requestedTime, result.suggestion.day, weekJobs);
+  const timeSuggestion = buildTimeVerdict(
+    requestedTime,
+    result.suggestion.day,
+    weekJobs,
+    profile.distance_unit
+  );
 
   return {
     coordinates: { latitude: geocoded.latitude, longitude: geocoded.longitude },
@@ -333,6 +352,7 @@ export async function getSchedulingSuggestion(
     allDays: result.allDays,
     maxTravelRangeKm: preferences.maxTravelRangeKm,
     maxJobsPerDay: preferences.maxJobsPerDay,
+    distanceUnit: profile.distance_unit,
   };
 }
 
@@ -445,7 +465,7 @@ export async function getDayTimeSuggestion(
     throw new Error("Could not compute a time suggestion for that date.");
   }
 
-  return buildTimeVerdict(requestedTime, result.allDays[0], dayJobs);
+  return buildTimeVerdict(requestedTime, result.allDays[0], dayJobs, profile.distance_unit);
 }
 
 export async function getAddressSuggestions(

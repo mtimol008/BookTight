@@ -12,7 +12,7 @@ import {
   type TimeSuggestion,
 } from "@/app/actions";
 import { PinIcon } from "@/components/icons";
-import { formatSuggestionDate } from "@/lib/format";
+import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import type { AddressSuggestion } from "@/lib/geocoding";
 import { ASSUMED_JOB_DURATION_MINUTES, type DayRoute, type TimeSlotType } from "@/lib/scheduling";
 
@@ -25,9 +25,9 @@ const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
   { value: "none", label: "Flexible" },
 ];
 
-function dayDetailLine(day: DayRoute): string {
+function dayDetailLine(day: DayRoute, unit: DistanceUnit): string {
   const jobLabel = `${day.jobCount} job${day.jobCount === 1 ? "" : "s"}`;
-  return `${jobLabel} booked · adds ${day.addedDistanceKm.toFixed(1)} km · day route ${day.totalDistanceKm.toFixed(1)} km`;
+  return `${jobLabel} booked · adds ${formatDistance(day.addedDistanceKm, unit)} · day route ${formatDistance(day.totalDistanceKm, unit)}`;
 }
 
 // Outside this range the "Nx further" comparison stops being informative:
@@ -45,7 +45,7 @@ function distanceComparisonLabel(day: DayRoute): string | null {
   return `roughly ${multiplier}x further than your other job(s) that day`;
 }
 
-export function NewJobForm() {
+export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
   const router = useRouter();
 
   const [address, setAddress] = useState("");
@@ -564,7 +564,7 @@ export function NewJobForm() {
 
             {shownDay && (
               <div className="suggest-meta">
-                {dayDetailLine(shownDay)}
+                {dayDetailLine(shownDay, distanceUnit)}
                 {shownDay.timeOption && !shownDay.timeOption.fits && (
                   <span className="badge">No free time</span>
                 )}
@@ -662,7 +662,7 @@ export function NewJobForm() {
             <div className="warn-block">
               {warningDay.addedDistanceKm > suggestion.maxTravelRangeKm && (
                 <p>
-                  This adds {warningDay.addedDistanceKm.toFixed(1)} km of extra driving
+                  This adds {formatDistance(warningDay.addedDistanceKm, distanceUnit)} of extra driving
                   on {warningDay.date}
                   {warningComparison && <> — {warningComparison}</>}.
                 </p>

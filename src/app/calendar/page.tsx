@@ -184,6 +184,7 @@ export default async function CalendarPage({
           stops={stops}
           returnHomeKm={returnHomeKm}
           totalDistanceKm={totalDistanceKm}
+          distanceUnit={profile?.distance_unit ?? "km"}
         />
       )}
     </AppShell>

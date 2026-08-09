@@ -81,6 +81,7 @@ export async function updateBusinessRules(
     .update({
       working_hours_start: validated.value.workingHoursStart,
       working_hours_end: validated.value.workingHoursEnd,
+      distance_unit: validated.value.distanceUnit,
       max_travel_range_km: validated.value.maxTravelRangeKm,
       max_jobs_per_day: validated.value.maxJobsPerDay,
     })

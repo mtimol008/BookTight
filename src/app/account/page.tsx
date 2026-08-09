@@ -14,6 +14,7 @@ import {
 import { signOut } from "@/app/login/actions";
 import { getCurrentProfile } from "@/lib/profiles";
 import { createClient } from "@/lib/supabase/server";
+import { formatDistance } from "@/lib/format";
 import { formatMinutesAsClock, parseTimeToMinutes } from "@/lib/scheduling";
 
 /**
@@ -125,7 +126,7 @@ export default async function AccountPage({
           <span className="summary-row-body">
             <span className="summary-row-label">Max Travel Range</span>
             <span className="summary-row-value">
-              {profile.max_travel_range_km} km from home base
+              {formatDistance(profile.max_travel_range_km, profile.distance_unit)} from home base
             </span>
           </span>
           <span className="summary-row-chevron">
