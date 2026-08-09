@@ -5,6 +5,8 @@
 
 import type { DistanceUnit } from "./format";
 
+const MILES_PER_KILOMETER = 0.621371;
+
 export interface BusinessRulesInput {
   workingHoursStart: string;
   workingHoursEnd: string;
@@ -46,8 +48,13 @@ export function validateBusinessRules(
     return { error: "Max travel range must be a positive number." };
   }
 
-  const maxTravelRangeKm =
-    distanceUnit === "mi" ? maxTravelRange / 0.621371 : maxTravelRange;
+  const maxTravelRangeKm = Math.round(
+    distanceUnit === "mi" ? maxTravelRange / MILES_PER_KILOMETER : maxTravelRange
+  );
+
+  if (maxTravelRangeKm <= 0) {
+    return { error: "Max travel range must be a positive number." };
+  }
 
   let maxJobsPerDay: number | null = null;
   if (maxJobsPerDayRaw) {
