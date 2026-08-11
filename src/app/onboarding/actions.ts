@@ -29,8 +29,7 @@ export async function completeOnboarding(
   const { error } = await supabase
     .from("profiles")
     .update({
-      working_hours_start: validated.value.workingHoursStart,
-      working_hours_end: validated.value.workingHoursEnd,
+      working_hours: validated.value.workingHours,
       distance_unit: validated.value.distanceUnit,
       max_travel_range_km: Math.round(validated.value.maxTravelRangeKm),
       max_jobs_per_day: validated.value.maxJobsPerDay,

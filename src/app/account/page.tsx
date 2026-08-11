@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { CalendarFeedSection } from "@/components/CalendarFeed";
 import {
   ClockIcon,
   ForwardIcon,
@@ -12,10 +13,39 @@ import {
   TrashIcon,
 } from "@/components/icons";
 import { signOut } from "@/app/login/actions";
+import { getCalendarFeedState } from "@/app/account/calendar-feed/actions";
 import { getCurrentProfile } from "@/lib/profiles";
 import { createClient } from "@/lib/supabase/server";
 import { formatDistance } from "@/lib/format";
-import { formatMinutesAsClock, parseTimeToMinutes } from "@/lib/scheduling";
+import { formatMinutesAsClock, parseTimeToMinutes, WEEKDAY_KEYS } from "@/lib/scheduling";
+
+/**
+ * One-line summary of a per-day working-hours map. When every enabled day
+ * shares the same start/end (the common case, including the default) that
+ * one window is shown; otherwise the days genuinely differ, so a plain
+ * "Varies by day" is more honest than a squeezed multi-range string.
+ */
+function summarizeWorkingHours(
+  workingHours: Record<string, { enabled: boolean; start: string; end: string }>
+): string {
+  const enabledDays = WEEKDAY_KEYS.filter((day) => workingHours[day]?.enabled);
+  if (enabledDays.length === 0) {
+    return "No working days set";
+  }
+
+  const first = workingHours[enabledDays[0]];
+  const uniform = enabledDays.every(
+    (day) => workingHours[day].start === first.start && workingHours[day].end === first.end
+  );
+
+  if (!uniform) {
+    return "Varies by day";
+  }
+
+  return `${formatMinutesAsClock(parseTimeToMinutes(first.start))} – ${formatMinutesAsClock(
+    parseTimeToMinutes(first.end)
+  )}`;
+}
 
 /**
  * Up to two initials for the avatar placeholder: first + last word of a
@@ -46,9 +76,9 @@ export default async function AccountPage({
   } = await supabase.auth.getUser();
 
   const displayName = profile.full_name || user?.email || "Your account";
-  const workingHours = `${formatMinutesAsClock(
-    parseTimeToMinutes(profile.working_hours_start)
-  )} – ${formatMinutesAsClock(parseTimeToMinutes(profile.working_hours_end))}`;
+  const workingHours = summarizeWorkingHours(profile.working_hours);
+
+  const initialFeedState = await getCalendarFeedState();
 
   return (
     <AppShell>
@@ -201,6 +231,8 @@ export default async function AccountPage({
           Sign out
         </button>
       </form>
+
+      <CalendarFeedSection initialFeedState={initialFeedState} />
 
       <p className="version">v1.0.2-stable</p>
     </AppShell>

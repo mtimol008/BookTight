@@ -63,6 +63,8 @@ export interface DayRoute {
   totalDistanceKm: number;
   /** Number of jobs already booked that day (not counting the new one). */
   jobCount: number;
+  /** Whether the account is set to work at all on this date's weekday. */
+  dayEnabled: boolean;
   /** Closest existing job that day to the new job, if any. */
   nearestExistingJobId: string | null;
   nearestExistingJobDistanceKm: number | null;
@@ -101,28 +103,87 @@ export interface BestDayResult {
 
 const EARTH_RADIUS_KM = 6371;
 
+export type Weekday = "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
+
+/** Sunday-first, matching Date.getDay() (0 = Sunday .. 6 = Saturday). */
+export const WEEKDAY_KEYS: Weekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+export const WEEKDAY_LABELS: Record<Weekday, string> = {
+  sun: "Sunday",
+  mon: "Monday",
+  tue: "Tuesday",
+  wed: "Wednesday",
+  thu: "Thursday",
+  fri: "Friday",
+  sat: "Saturday",
+};
+
+/** Which weekday a "YYYY-MM-DD" string falls on, in LOCAL time. Deliberately
+ *  not `new Date(dateString).getDay()` — that parses as UTC and can name
+ *  the wrong local day depending on the runtime's timezone offset. Mirrors
+ *  the local-time construction week.ts already uses for the same reason. */
+export function weekdayKeyOf(dateString: string): Weekday {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return WEEKDAY_KEYS[new Date(year, month - 1, day).getDay()];
+}
+
+/** One day's on/off state and hours, as minutes-since-midnight. */
+export interface DayHours {
+  enabled: boolean;
+  startMinutes: number;
+  endMinutes: number;
+}
+
 /**
  * Per-account settings that used to be fixed constants: how far an added
  * job's extra driving can go before it's not "recommended", the working
- * day a suggested time is kept inside, and an optional cap on jobs per
- * day. Real values come from the signed-in user's profile; the default
- * below matches what was hardcoded before these existed, so behavior is
- * unchanged for anyone who hasn't visited Account yet.
+ * hours a suggested time is kept inside (now per day of the week), and an
+ * optional cap on jobs per day. Real values come from the signed-in user's
+ * profile; the default below matches what was hardcoded before these
+ * existed, so behavior is unchanged for anyone who hasn't visited Account
+ * yet.
  */
 export interface SchedulingPreferences {
   maxTravelRangeKm: number;
-  workdayStartMinutes: number;
-  workdayEndMinutes: number;
+  workingHours: Record<Weekday, DayHours>;
   /** null = no cap, same as today's actual (uncapped) behavior. */
   maxJobsPerDay: number | null;
 }
 
+const DEFAULT_WEEKDAY_HOURS: DayHours = {
+  enabled: true,
+  startMinutes: 8 * 60,
+  endMinutes: 18 * 60,
+};
+
+const DEFAULT_WEEKEND_HOURS: DayHours = {
+  enabled: false,
+  startMinutes: 8 * 60,
+  endMinutes: 12 * 60,
+};
+
 export const DEFAULT_SCHEDULING_PREFERENCES: SchedulingPreferences = {
   maxTravelRangeKm: 65,
-  workdayStartMinutes: 8 * 60,
-  workdayEndMinutes: 18 * 60,
+  workingHours: {
+    sun: DEFAULT_WEEKEND_HOURS,
+    mon: DEFAULT_WEEKDAY_HOURS,
+    tue: DEFAULT_WEEKDAY_HOURS,
+    wed: DEFAULT_WEEKDAY_HOURS,
+    thu: DEFAULT_WEEKDAY_HOURS,
+    fri: DEFAULT_WEEKDAY_HOURS,
+    sat: DEFAULT_WEEKEND_HOURS,
+  },
   maxJobsPerDay: null,
 };
+
+/** The flat start/end/range window the low-level time helpers below
+ *  actually need — resolved once per candidate day from that day's own
+ *  DayHours, since working hours are no longer the same for every day. */
+interface DayScheduleWindow {
+  maxTravelRangeKm: number;
+  workdayStartMinutes: number;
+  workdayEndMinutes: number;
+}
 
 /** Below this, an existing job is "close enough" to the new one to be worth
  *  clustering on the same day, even if that day is otherwise far from home.
@@ -207,7 +268,7 @@ function shapeBadness(dayFraction: number, closeness: number): number {
 /** Maps a minutes-since-midnight value into a 0..1 fraction of the working
  *  day, clamped — used to compare a moment against the day-shape bias
  *  regardless of which gap it happens to fall in. */
-function dayFractionOf(minutes: number, preferences: SchedulingPreferences): number {
+function dayFractionOf(minutes: number, preferences: DayScheduleWindow): number {
   const span = preferences.workdayEndMinutes - preferences.workdayStartMinutes;
   if (span <= 0) return 0.5;
   return Math.max(
@@ -759,7 +820,7 @@ function buildNeighbor(
 function computeGapWindow(
   previousNeighbor: RouteNeighbor,
   nextNeighbor: RouteNeighbor,
-  preferences: SchedulingPreferences,
+  preferences: DayScheduleWindow,
   newJobDurationMinutes: number
 ): { earliestStartMinutes: number; latestStartMinutes: number } {
   const previousBound = neighborBoundMinutes(previousNeighbor, "previous");
@@ -802,7 +863,7 @@ function biasedTargetMinutes(
   earliestStartMinutes: number,
   latestStartMinutes: number,
   closeness: number,
-  preferences: SchedulingPreferences
+  preferences: DayScheduleWindow
 ): number {
   if (latestStartMinutes <= earliestStartMinutes) {
     return earliestStartMinutes;
@@ -834,7 +895,7 @@ function placeWithinWindow(
   earliestStartMinutes: number,
   latestStartMinutes: number,
   closeness: number,
-  preferences: SchedulingPreferences
+  preferences: DayScheduleWindow
 ): { startMinutes: number | null; slot: NamedTimeSlot | null } {
   const target = biasedTargetMinutes(
     earliestStartMinutes,
@@ -914,7 +975,7 @@ function analyzeDayGaps(
   routeStops: RouteStop[],
   baselineTotalKm: number,
   requestedSlot: NamedTimeSlot | null,
-  preferences: SchedulingPreferences,
+  preferences: DayScheduleWindow,
   newJobDurationMinutes: number
 ): DayGapAnalysis {
   const skeleton = buildFixedSkeleton(
@@ -1119,6 +1180,14 @@ export function suggestBestDay(
   const newJobSortKey = getSortKeyMinutes(newJobTime);
 
   const allDays: DayRoute[] = candidateDates.map((date) => {
+    const weekday = weekdayKeyOf(date);
+    const dayHours = preferences.workingHours[weekday] ?? DEFAULT_SCHEDULING_PREFERENCES.workingHours[weekday];
+    const dayWindow: DayScheduleWindow = {
+      maxTravelRangeKm: preferences.maxTravelRangeKm,
+      workdayStartMinutes: dayHours.startMinutes,
+      workdayEndMinutes: dayHours.endMinutes,
+    };
+
     const stops = jobsByDate.get(date) ?? [];
     const routeStops: RouteStop[] = stops.map((job) => ({
       id: job.id,
@@ -1151,14 +1220,14 @@ export function suggestBestDay(
     const isFlexible = newJobTime.type === "none";
     const requestedSlot = isNamedSlot(newJobTime.type) ? newJobTime.type : null;
     const gapAnalysis =
-      isFlexible || requestedSlot
+      dayHours.enabled && (isFlexible || requestedSlot)
         ? analyzeDayGaps(
             newJob,
             home,
             routeStops,
             before.totalDistanceKm,
             requestedSlot,
-            preferences,
+            dayWindow,
             newJobDurationMinutes
           )
         : null;
@@ -1181,7 +1250,23 @@ export function suggestBestDay(
 
     let previousNeighbor = buildNeighbor(beforeStop, newJob, home);
     let nextNeighbor = buildNeighbor(afterStop, newJob, home);
-    let dayTimeOption = gapAnalysis?.option ?? null;
+    // A day that's off is unbookable no matter what time was requested —
+    // unlike a full-day gap failure, this also has to cover "specific"
+    // requests, which never get a timeOption from gapAnalysis at all
+    // (analyzeDayGaps only runs for flexible/named-slot requests above).
+    let dayTimeOption: DayTimeOption | null = !dayHours.enabled
+      ? {
+          fits: false,
+          previousNeighbor: buildNeighbor(null, newJob, home),
+          nextNeighbor: buildNeighbor(null, newJob, home),
+          earliestStartMinutes: dayWindow.workdayStartMinutes,
+          latestStartMinutes: dayWindow.workdayEndMinutes,
+          shortfallMinutes: null,
+          startMinutes: null,
+          slot: null,
+          blockedSlots: [],
+        }
+      : (gapAnalysis?.option ?? null);
 
     // A flexible job whose suggestion resolved to a NAMED slot (a wide
     // window, not an exact time) doesn't actually get inserted at "the gap
@@ -1258,6 +1343,7 @@ export function suggestBestDay(
       addedDistanceKm,
       totalDistanceKm,
       jobCount: stops.length,
+      dayEnabled: dayHours.enabled,
       nearestExistingJobId,
       nearestExistingJobDistanceKm,
       typicalSpacingKm,

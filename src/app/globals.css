@@ -605,6 +605,38 @@ body[data-field-focused="true"] .fab {
   font-family: var(--font-mono), monospace;
 }
 
+.working-hours-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.working-hours-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.working-hours-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 92px;
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.working-hours-row .btn-row {
+  flex: 1;
+  min-width: 180px;
+}
+
+.working-hours-row .input--time:disabled {
+  opacity: 0.5;
+}
+
 .autocomplete {
   list-style: none;
   border: 1px solid var(--border);

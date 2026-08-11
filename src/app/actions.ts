@@ -14,11 +14,16 @@ import {
 import { getCurrentProfile, type ProfileRecord } from "@/lib/profiles";
 import {
   compareManualOrder,
+  DEFAULT_SCHEDULING_PREFERENCES,
   isNamedSlot,
   parseTimeToMinutes,
   suggestBestDay,
   formatMinutesAsClock,
   minutesToTimeValue,
+  weekdayKeyOf,
+  WEEKDAY_KEYS,
+  WEEKDAY_LABELS,
+  type DayHours,
   type DayRoute,
   type DaySuggestion,
   type ExistingJob,
@@ -27,6 +32,7 @@ import {
   type RouteNeighbor,
   type SchedulingPreferences,
   type TimeSlotType,
+  type Weekday,
 } from "@/lib/scheduling";
 import { formatDistance, type DistanceUnit } from "@/lib/format";
 import { getCurrentWeekDates, getCurrentWeekRange, getTodayDateString } from "@/lib/week";
@@ -65,13 +71,27 @@ export interface SuggestionResult {
   distanceUnit: DistanceUnit;
 }
 
-/** The profile's stored HH:MM working-hours strings and km/count settings,
- *  converted into the shape suggestBestDay expects. */
+/** The profile's stored per-day HH:MM working-hours strings and km/count
+ *  settings, converted into the shape suggestBestDay expects. Falls back to
+ *  the app default for any day missing from the profile's JSON (shouldn't
+ *  happen post-migration, but keeps a hand-edited or partial row from
+ *  crashing the app). */
 function schedulingPreferencesFromProfile(profile: ProfileRecord): SchedulingPreferences {
+  const workingHours = {} as Record<Weekday, DayHours>;
+  for (const day of WEEKDAY_KEYS) {
+    const raw = profile.working_hours?.[day];
+    workingHours[day] = raw
+      ? {
+          enabled: raw.enabled,
+          startMinutes: parseTimeToMinutes(raw.start),
+          endMinutes: parseTimeToMinutes(raw.end),
+        }
+      : DEFAULT_SCHEDULING_PREFERENCES.workingHours[day];
+  }
+
   return {
     maxTravelRangeKm: profile.max_travel_range_km,
-    workdayStartMinutes: parseTimeToMinutes(profile.working_hours_start),
-    workdayEndMinutes: parseTimeToMinutes(profile.working_hours_end),
+    workingHours,
     maxJobsPerDay: profile.max_jobs_per_day,
   };
 }
@@ -244,6 +264,19 @@ function buildTimeVerdict(
   weekJobs: JobRecord[],
   distanceUnit: DistanceUnit
 ): TimeSuggestion | null {
+  // A day that's off blocks every request type, including "specific" —
+  // which otherwise falls through to `return null` below with no warning
+  // at all, since it never gets a timeOption from the gap analysis.
+  if (!day.dayEnabled) {
+    return {
+      fits: false,
+      slot: null,
+      specificTime: null,
+      label: null,
+      reasoning: `You don't work ${WEEKDAY_LABELS[weekdayKeyOf(day.date)]}s. Try another day, or turn this day on in Account.`,
+    };
+  }
+
   if (requestedTime.type === "none") {
     return buildTimeSuggestion(day, weekJobs, distanceUnit);
   }

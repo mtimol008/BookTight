@@ -6,6 +6,7 @@ import {
   planDayRoute,
   suggestBestDay,
   DEFAULT_SCHEDULING_PREFERENCES,
+  WEEKDAY_KEYS,
   type DayRoute,
   type DayTimeOption,
   type ExistingJob,
@@ -16,6 +17,17 @@ import {
 
 function withPrefs(overrides: Partial<SchedulingPreferences>): SchedulingPreferences {
   return { ...DEFAULT_SCHEDULING_PREFERENCES, ...overrides };
+}
+
+/** All 7 days enabled at the same start/end — the per-day equivalent of the
+ *  old flat workdayStartMinutes/workdayEndMinutes override, for scenarios
+ *  testing the working-hours window itself rather than which days are on. */
+function withUniformWorkingHours(startMinutes: number, endMinutes: number): SchedulingPreferences {
+  const workingHours = {} as SchedulingPreferences["workingHours"];
+  for (const day of WEEKDAY_KEYS) {
+    workingHours[day] = { enabled: true, startMinutes, endMinutes };
+  }
+  return { ...DEFAULT_SCHEDULING_PREFERENCES, workingHours };
 }
 
 /** Every flexible-job scenario has a timeOption; fail loudly if not. */
@@ -275,9 +287,9 @@ const NONE: JobTime = { type: "none" };
   const newJob = { latitude: 30.3, longitude: -97.0 };
   const existingJobs: ExistingJob[] = [
     { id: "preston", date: "2026-08-03", latitude: 30.8, longitude: -97.0, time: NONE, durationMinutes: null, manualPosition: null },
-    { id: "manchester-existing", date: "2026-08-09", latitude: 30.31, longitude: -97.05, time: NONE, durationMinutes: null, manualPosition: null },
+    { id: "manchester-existing", date: "2026-08-06", latitude: 30.31, longitude: -97.05, time: NONE, durationMinutes: null, manualPosition: null },
   ];
-  const candidateDates = ["2026-08-03", "2026-08-09"];
+  const candidateDates = ["2026-08-03", "2026-08-06"];
 
   const result = suggestBestDay(newJob, NONE, home, candidateDates, existingJobs);
   if (!result) {
@@ -286,7 +298,7 @@ const NONE: JobTime = { type: "none" };
   }
 
   const prestonDay = result.allDays.find((d) => d.date === "2026-08-03")!;
-  const manchesterDay = result.allDays.find((d) => d.date === "2026-08-09")!;
+  const manchesterDay = result.allDays.find((d) => d.date === "2026-08-06")!;
 
   expectTrue(
     "scenario 9 confirms the bug would occur under a plain addedDistanceKm sort",
@@ -294,7 +306,7 @@ const NONE: JobTime = { type: "none" };
   );
   expectTrue(
     "scenario 9 fix picks the genuinely-nearby Manchester day, not the home-proximity artifact",
-    result.suggestion.day.date === "2026-08-09"
+    result.suggestion.day.date === "2026-08-06"
   );
 }
 
@@ -748,7 +760,7 @@ const NONE: JobTime = { type: "none" };
     home,
     ["2026-08-10"],
     [],
-    withPrefs({ workdayStartMinutes: 10 * 60, workdayEndMinutes: 14 * 60 })
+    withUniformWorkingHours(10 * 60, 14 * 60)
   );
   if (!withDefault || !withCustom) {
     console.error("FAIL: scenario 21 expected results, got null");
@@ -988,7 +1000,7 @@ const NONE: JobTime = { type: "none" };
   const E = { latitude: 30.01, longitude: -97.0 };
   const F = { latitude: 30.02, longitude: -97.0 };
   const candidate = { latitude: 30.015, longitude: -97.0 };
-  const prefs = withPrefs({ workdayStartMinutes: 8 * 60 + 55, workdayEndMinutes: 11 * 60 + 40 });
+  const prefs = withUniformWorkingHours(8 * 60 + 55, 11 * 60 + 40);
 
   function fitsWithEDuration(eDurationMinutes: number | null): boolean {
     const existingJobs: ExistingJob[] = [
@@ -1224,6 +1236,84 @@ const NONE: JobTime = { type: "none" };
 
   const noCandidatesResult = suggestBestDay(newJob, NONE, home, [], []);
   expectTrue("zero candidate dates correctly returns null", noCandidatesResult === null);
+}
+
+// --- Scenario 34: a disabled day is skipped even though it's cheaper by ---
+// distance. Same shape as scenario 22 (a two-tier ranking demotes a day
+// below a worse-by-distance one) but driven by the day being turned off
+// entirely, rather than a time or job-count limit.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.011, longitude: -97.0 };
+  const existingJobs: ExistingJob[] = [
+    { id: "mon", date: "2026-08-10", latitude: 30.012, longitude: -97.0, time: NONE, durationMinutes: null, manualPosition: null },
+    // Off the home/newJob longitude line, unlike mon — colinear points
+    // would make insertion cost exactly 0, tying with Monday instead of
+    // genuinely costing more.
+    { id: "tue", date: "2026-08-11", latitude: 30.5, longitude: -96.8, time: NONE, durationMinutes: null, manualPosition: null },
+  ];
+  const candidateDates = ["2026-08-10", "2026-08-11"];
+
+  const mondayOffPrefs: SchedulingPreferences = {
+    ...DEFAULT_SCHEDULING_PREFERENCES,
+    workingHours: {
+      ...DEFAULT_SCHEDULING_PREFERENCES.workingHours,
+      mon: { ...DEFAULT_SCHEDULING_PREFERENCES.workingHours.mon, enabled: false },
+    },
+  };
+
+  const result = suggestBestDay(newJob, NONE, home, candidateDates, existingJobs, mondayOffPrefs);
+  if (!result) {
+    console.error("FAIL: scenario 34 expected a result, got null");
+    process.exit(1);
+  }
+  const monday = result.allDays.find((d) => d.date === "2026-08-10")!;
+  const tuesday = result.allDays.find((d) => d.date === "2026-08-11")!;
+
+  expectTrue("scenario 34 Monday is cheaper by distance", monday.addedDistanceKm < tuesday.addedDistanceKm);
+  expectTrue("scenario 34 Monday is marked as a day off", monday.dayEnabled === false);
+  expectTrue("scenario 34 Monday has no workable time because the day is off", timeOptionOf(monday).fits === false);
+  expectTrue("scenario 34 Tuesday is a normal working day", tuesday.dayEnabled === true && timeOptionOf(tuesday).fits === true);
+  expectTrue(
+    "scenario 34 the day that's actually open is suggested, not the cheaper closed one",
+    result.suggestion.day.date === "2026-08-11"
+  );
+}
+
+// --- Scenario 35: per-day hours are genuinely per-day, not a whole-week ---
+// override. Saturday gets a narrow 8am-12pm window while Monday keeps the
+// account default (8am-6pm) — both evaluated in the SAME call, proving
+// Saturday's hours don't leak onto Monday or vice versa.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.03, longitude: -97.0 };
+  const candidateDates = ["2026-08-10", "2026-08-15"]; // Monday, Saturday
+
+  const satNarrowPrefs: SchedulingPreferences = {
+    ...DEFAULT_SCHEDULING_PREFERENCES,
+    workingHours: {
+      ...DEFAULT_SCHEDULING_PREFERENCES.workingHours,
+      sat: { enabled: true, startMinutes: 8 * 60, endMinutes: 12 * 60 },
+    },
+  };
+
+  const result = suggestBestDay(newJob, NONE, home, candidateDates, [], satNarrowPrefs);
+  if (!result) {
+    console.error("FAIL: scenario 35 expected a result, got null");
+    process.exit(1);
+  }
+  const monday = result.allDays.find((d) => d.date === "2026-08-10")!;
+  const saturday = result.allDays.find((d) => d.date === "2026-08-15")!;
+
+  expectTrue("scenario 35 Saturday is enabled with its own narrow window", saturday.dayEnabled === true);
+  expectTrue(
+    "scenario 35 Saturday's suggested window never extends past its own 12pm end",
+    timeOptionOf(saturday).latestStartMinutes <= 12 * 60
+  );
+  expectTrue(
+    "scenario 35 Monday's window still extends well past Saturday's 12pm cutoff",
+    timeOptionOf(monday).latestStartMinutes > 12 * 60
+  );
 }
 
 console.log("\nAll scheduling scenarios passed.");

@@ -1,5 +1,6 @@
 import { createClient } from "./supabase/server";
 import type { DistanceUnit } from "./format";
+import type { Weekday } from "./scheduling";
 
 export interface ProfileRecord {
   id: string;
@@ -8,9 +9,9 @@ export interface ProfileRecord {
   home_latitude: number;
   home_longitude: number;
   business_name: string | null;
-  /** "HH:MM", 24-hour — same shape as a job's specific_time. */
-  working_hours_start: string;
-  working_hours_end: string;
+  /** Per weekday: on/off and "HH:MM" (24-hour, same shape as a job's
+   *  specific_time) start/end. */
+  working_hours: Record<Weekday, { enabled: boolean; start: string; end: string }>;
   max_travel_range_km: number;
   distance_unit: DistanceUnit;
   /** null = no cap. */

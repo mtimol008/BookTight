@@ -101,3 +101,14 @@ export function formatMonthParam(date: Date): string {
 export function shiftMonth(date: Date, delta: number): Date {
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
+
+/** Week range starting from a given Monday, spanning N weeks. */
+export function getWeekRange(startMonday: string, weeks: number): WeekRange {
+  const start = new Date(startMonday + "T00:00:00");
+  const end = new Date(start);
+  end.setDate(start.getDate() + weeks * 7 - 1);
+  return {
+    startDate: startMonday,
+    endDate: toISODate(end),
+  };
+}

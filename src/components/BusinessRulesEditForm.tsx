@@ -3,6 +3,8 @@
 import { useState, useActionState, type FormEvent } from "react";
 import { updateBusinessRules, type AccountFormState } from "@/app/account/actions";
 import { distanceKmToUnit, type DistanceUnit } from "@/lib/format";
+import { WEEKDAY_KEYS, WEEKDAY_LABELS } from "@/lib/scheduling";
+import { WorkingHoursFields, type WorkingHoursState } from "@/components/WorkingHoursFields";
 import type { ProfileRecord } from "@/lib/profiles";
 
 const initialState: AccountFormState = {};
@@ -10,12 +12,18 @@ const initialState: AccountFormState = {};
 export function BusinessRulesEditForm({ profile }: { profile: ProfileRecord }) {
   const [state, formAction, isPending] = useActionState(updateBusinessRules, initialState);
 
-  const [workingHoursStart, setWorkingHoursStart] = useState(
-    profile.working_hours_start.slice(0, 5)
-  );
-  const [workingHoursEnd, setWorkingHoursEnd] = useState(
-    profile.working_hours_end.slice(0, 5)
-  );
+  const [workingHours, setWorkingHours] = useState<WorkingHoursState>(() => {
+    const next = {} as WorkingHoursState;
+    for (const day of WEEKDAY_KEYS) {
+      const dayHours = profile.working_hours[day];
+      next[day] = {
+        enabled: dayHours.enabled,
+        start: dayHours.start.slice(0, 5),
+        end: dayHours.end.slice(0, 5),
+      };
+    }
+    return next;
+  });
   const initialDistanceUnit = profile.distance_unit ?? "km";
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>(initialDistanceUnit);
   const [maxTravelRange, setMaxTravelRange] = useState(
@@ -24,40 +32,29 @@ export function BusinessRulesEditForm({ profile }: { profile: ProfileRecord }) {
   const [clientError, setClientError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    if (workingHoursEnd <= workingHoursStart) {
+    const enabledDays = WEEKDAY_KEYS.filter((day) => workingHours[day].enabled);
+    if (enabledDays.length === 0) {
       event.preventDefault();
-      setClientError("Working hours end must be after the start.");
+      setClientError("At least one day needs to be turned on.");
       return;
+    }
+    for (const day of enabledDays) {
+      if (workingHours[day].end <= workingHours[day].start) {
+        event.preventDefault();
+        setClientError(`${WEEKDAY_LABELS[day]}'s end time must be after its start time.`);
+        return;
+      }
     }
     setClientError(null);
   }
 
   return (
     <form action={formAction} onSubmit={handleSubmit}>
-      <div className="field">
-        <span className="field-label">Working hours</span>
-        <div className="btn-row">
-          <input
-            className="input input--time"
-            type="time"
-            name="workingHoursStart"
-            required
-            value={workingHoursStart}
-            onChange={(e) => setWorkingHoursStart(e.target.value)}
-          />
-          <input
-            className="input input--time"
-            type="time"
-            name="workingHoursEnd"
-            required
-            value={workingHoursEnd}
-            onChange={(e) => setWorkingHoursEnd(e.target.value)}
-          />
-        </div>
-        <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
-          Used when there's no booked job to anchor a suggested time against.
-        </p>
-      </div>
+      <WorkingHoursFields
+        idPrefix="business-rules"
+        value={workingHours}
+        onChange={setWorkingHours}
+      />
 
       <div className="field">
         <label className="field-label" htmlFor="business-rules-distance-unit">
