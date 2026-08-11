@@ -7,7 +7,8 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
-  const { token } = await params;
+  const { token: rawToken } = await params;
+  const token = rawToken.endsWith(".ics") ? rawToken.slice(0, -4) : rawToken;
   console.log("[calendar-feed] Request for token:", token?.slice(0, 8) + "...");
 
   const profile = await getProfileByFeedToken(token);
