@@ -19,8 +19,11 @@ export async function getProfileByFeedToken(token: string): Promise<CalendarFeed
     .maybeSingle();
 
   if (error) {
+    console.error("[calendar-feed] DB error:", error.message);
     throw new Error(`Failed to fetch profile by feed token: ${error.message}`);
   }
+
+  console.log("[calendar-feed] DB query result:", data ? { id: data.id, token_match: data.calendar_feed_token === token, enabled: data.calendar_feed_enabled } : "no row");
 
   if (!data || !data.calendar_feed_enabled) {
     return null;
