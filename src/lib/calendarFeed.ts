@@ -1,4 +1,5 @@
 import { createClient } from "./supabase/server";
+import { createAdminClient } from "./supabase/admin";
 
 export interface CalendarFeedProfile {
   id: string;
@@ -9,8 +10,15 @@ export interface CalendarFeedProfile {
   home_longitude: number;
 }
 
+/**
+ * Looks up a profile by its feed token for the public, unauthenticated
+ * .ics endpoint (Apple/Google/Outlook fetch this with no Supabase session,
+ * so the normal cookie-scoped client would get blocked by RLS's
+ * `to authenticated` policies). Uses the admin client instead — the
+ * unguessable token itself is the auth check here, same as an API key.
+ */
 export async function getProfileByFeedToken(token: string): Promise<CalendarFeedProfile | null> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("profiles")
@@ -19,11 +27,8 @@ export async function getProfileByFeedToken(token: string): Promise<CalendarFeed
     .maybeSingle();
 
   if (error) {
-    console.error("[calendar-feed] DB error:", error.message);
     throw new Error(`Failed to fetch profile by feed token: ${error.message}`);
   }
-
-  console.log("[calendar-feed] DB query result:", data ? { id: data.id, token_match: data.calendar_feed_token === token, enabled: data.calendar_feed_enabled } : "no row");
 
   if (!data || !data.calendar_feed_enabled) {
     return null;

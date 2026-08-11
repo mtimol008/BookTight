@@ -1,5 +1,6 @@
 import { getTodayDateString } from "./week";
 import { createClient } from "./supabase/server";
+import { createAdminClient } from "./supabase/admin";
 
 export type JobStatus = "scheduled" | "completed" | "cancelled";
 
@@ -38,6 +39,35 @@ export async function getJobsForWeek(
   const { data, error } = await supabase
     .from("jobs")
     .select("*")
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .neq("status", "cancelled")
+    .order("date", { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to fetch jobs: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+/**
+ * Same as getJobsForWeek, but for the public calendar feed endpoint, which
+ * has no logged-in user to scope via RLS. Uses the admin client and filters
+ * by user_id explicitly instead, so a feed can only ever see its own
+ * owner's jobs.
+ */
+export async function getJobsForWeekByUserId(
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<JobRecord[]> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("*")
+    .eq("user_id", userId)
     .gte("date", startDate)
     .lte("date", endDate)
     .neq("status", "cancelled")

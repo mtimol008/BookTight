@@ -1,7 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup"];
+// Pages logged-out visitors can reach, and logged-in users get bounced away
+// from (back to "/") since they have no reason to see a login/signup form.
+const AUTH_PAGES = ["/login", "/signup"];
+
+// Publicly fetchable endpoints that skip the login gate entirely, in both
+// directions — e.g. the .ics calendar feed, which Apple/Google/Outlook
+// fetch with no Supabase session at all, and which a logged-in user should
+// still be able to open directly (e.g. the "Test in Browser" link).
+const PUBLIC_PATHS = [...AUTH_PAGES, "/api/calendar/feed"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -36,6 +44,9 @@ export async function proxy(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
+  const isAuthPage = AUTH_PAGES.some((path) =>
+    request.nextUrl.pathname.startsWith(path)
+  );
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
@@ -43,7 +54,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicPath) {
+  if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
