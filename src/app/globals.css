@@ -109,6 +109,38 @@ button:disabled {
   justify-content: center;
 }
 
+/* Shown by each route's loading.tsx while its data is still being
+   fetched — instant feedback instead of a frozen screen during
+   navigation. */
+.route-loading {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.route-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: route-loading-spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-loading-spinner {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+@keyframes route-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .nav {
   position: fixed;
   bottom: 0;

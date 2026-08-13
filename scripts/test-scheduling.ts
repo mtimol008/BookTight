@@ -1316,4 +1316,45 @@ const NONE: JobTime = { type: "none" };
   );
 }
 
+// --- Scenario 36: a fully-blocked week never reads as "recommended" -------
+// Every candidate day disabled. The new job sits right next to home, so
+// addedDistanceKm is tiny — comfortably under maxTravelRangeKm, which is
+// the ONLY thing the old pickSuggestion looked at. Without checking whether
+// the winning day is actually bookable, this would have been mislabeled
+// "recommended" (or "clustered", if it happened to have a nearby existing
+// job) even though nobody can actually work either day. The honest answer
+// is "none" — the same "closest option, shown as context" bucket a
+// genuinely-too-far week already uses — with the day still present in
+// allDays (never hidden) and its timeOption still reporting why it fails.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.001, longitude: -97.0 };
+  const candidateDates = ["2026-08-10", "2026-08-11"];
+
+  const allDaysOffPrefs: SchedulingPreferences = {
+    ...DEFAULT_SCHEDULING_PREFERENCES,
+    workingHours: {
+      ...DEFAULT_SCHEDULING_PREFERENCES.workingHours,
+      mon: { ...DEFAULT_SCHEDULING_PREFERENCES.workingHours.mon, enabled: false },
+      tue: { ...DEFAULT_SCHEDULING_PREFERENCES.workingHours.tue, enabled: false },
+    },
+  };
+
+  const result = suggestBestDay(newJob, NONE, home, candidateDates, [], allDaysOffPrefs);
+  if (!result) {
+    console.error("FAIL: scenario 36 expected a result, got null");
+    process.exit(1);
+  }
+
+  expectTrue(
+    "scenario 36 confirms the premise: this would pass the old distance-only recommended check",
+    result.allDays[0].addedDistanceKm <= allDaysOffPrefs.maxTravelRangeKm
+  );
+  expectKind("scenario 36 a fully-blocked week is never labeled recommended", result.suggestion.kind, "none");
+  expectTrue(
+    "scenario 36 both blocked days are still present, not hidden",
+    result.allDays.length === 2 && result.allDays.every((d) => timeOptionOf(d).fits === false)
+  );
+}
+
 console.log("\nAll scheduling scenarios passed.");

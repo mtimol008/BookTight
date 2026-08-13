@@ -176,6 +176,34 @@ export const DEFAULT_SCHEDULING_PREFERENCES: SchedulingPreferences = {
   maxJobsPerDay: null,
 };
 
+/** A profile's stored per-day working-hours shape, straight from the
+ *  `working_hours` jsonb column — "HH:MM" strings, not yet minutes. */
+export interface StoredDayHours {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+/** One day's stored "HH:MM" hours -> the minutes-since-midnight form the
+ *  scheduling helpers use, falling back to the app default for a missing
+ *  day (shouldn't happen post-migration, but keeps a hand-edited or
+ *  partial row from crashing). Shared by the suggestion flow
+ *  (actions.ts's schedulingPreferencesFromProfile) and the calendar export
+ *  (ical.ts) so both read a day's hours the same way. */
+export function dayHoursFromWorkingHours(
+  workingHours: Record<Weekday, StoredDayHours> | null | undefined,
+  day: Weekday
+): DayHours {
+  const raw = workingHours?.[day];
+  return raw
+    ? {
+        enabled: raw.enabled,
+        startMinutes: parseTimeToMinutes(raw.start),
+        endMinutes: parseTimeToMinutes(raw.end),
+      }
+    : DEFAULT_SCHEDULING_PREFERENCES.workingHours[day];
+}
+
 /** The flat start/end/range window the low-level time helpers below
  *  actually need — resolved once per candidate day from that day's own
  *  DayHours, since working hours are no longer the same for every day. */
@@ -649,6 +677,72 @@ export function planDayRoute(home: Coordinates, jobs: ExistingJob[]): PlannedDay
     returnHomeKm: orderedStops.length === 0 ? 0 : haversineDistanceKm(previous, home),
     totalDistanceKm,
   };
+}
+
+export interface PlannedClockTime {
+  jobId: string;
+  /** Minutes-since-midnight, for the calendar export — not shown anywhere
+   *  in the app itself. */
+  startMinutes: number;
+  endMinutes: number;
+}
+
+/**
+ * Real, non-overlapping clock times for a day's jobs, in the SAME order
+ * buildDayRoute already decided (manual-position-aware) — for the calendar
+ * export only. Nothing about in-app display reads this; the app still
+ * shows "Morning" / "9:00am" / etc. exactly as it always has.
+ *
+ * A "specific" job keeps its literal stored time, always — that's a real
+ * commitment the user typed, never moved. Every other timed job (a named
+ * slot) is chained forward from whatever precedes it: the previous stop's
+ * end plus travel time to here, or the day's own start plus travel from
+ * home for the first stop — same formula computeGapWindow already uses for
+ * a home-adjacent gap, just walked across the whole day instead of
+ * checked once. Deliberately does NOT clamp a named slot back inside its
+ * nominal range (e.g. force "morning" to stay before noon) when a busy day
+ * pushes it later — clamping backward would shove it in front of the job
+ * that's actually before it, recreating the overlap this exists to fix.
+ * The honest time, not an invented one.
+ */
+export function planDayClockTimes(
+  home: Coordinates,
+  dayHours: DayHours,
+  jobs: ExistingJob[]
+): PlannedClockTime[] {
+  const routeStops: RouteStop[] = jobs.map((job) => ({
+    id: job.id,
+    latitude: job.latitude,
+    longitude: job.longitude,
+    sortKeyMinutes: getSortKeyMinutes(job.time),
+    timeType: job.time.type,
+    durationMinutes: resolveDurationMinutes(job.durationMinutes),
+    manualPosition: job.manualPosition,
+  }));
+
+  const { orderedStops } = buildDayRoute(home, routeStops);
+
+  const results: PlannedClockTime[] = [];
+  let previousPoint: Coordinates = home;
+  let previousDepartureMinutes = dayHours.startMinutes;
+
+  for (const stop of orderedStops) {
+    const travelMinutes = estimateTravelMinutes(haversineDistanceKm(previousPoint, stop));
+    const arrivalMinutes = previousDepartureMinutes + travelMinutes;
+
+    const startMinutes =
+      stop.timeType === "specific" && stop.sortKeyMinutes !== null
+        ? stop.sortKeyMinutes
+        : Math.max(arrivalMinutes, dayHours.startMinutes);
+
+    const endMinutes = startMinutes + stop.durationMinutes;
+    results.push({ jobId: stop.id, startMinutes, endMinutes });
+
+    previousPoint = stop;
+    previousDepartureMinutes = endMinutes;
+  }
+
+  return results;
 }
 
 export interface ManualOrderComparison {
@@ -1394,25 +1488,32 @@ export function suggestBestDay(
     return rankingScore(a) - rankingScore(b);
   });
 
-  const suggestion = pickSuggestion(allDays, preferences);
+  const suggestion = pickSuggestion(allDays, preferences, isUnsuitableToSuggest(allDays[0]));
 
   return { suggestion, allDays };
 }
 
 function pickSuggestion(
   allDays: DayRoute[],
-  preferences: SchedulingPreferences
+  preferences: SchedulingPreferences,
+  // Whether the winning day itself is disabled, has no fitting gap, or is
+  // at capacity — only possible when EVERY candidate day is unsuitable
+  // (the sort above already pushes any unsuitable day behind a suitable
+  // one). Gates "recommended"/"clustered" so a fully-blocked week can never
+  // read as a confident pick; it honestly falls through to "none" instead.
+  bestIsUnsuitable: boolean
 ): DaySuggestion {
   // allDays is already sorted with proximity-to-existing-jobs weighed in,
   // so the winner here is already the best clustering-aware candidate —
   // no separate fallback search needed.
   const best = allDays[0];
 
-  if (best.addedDistanceKm <= preferences.maxTravelRangeKm) {
+  if (!bestIsUnsuitable && best.addedDistanceKm <= preferences.maxTravelRangeKm) {
     return { kind: "recommended", day: best };
   }
 
   const isClustered =
+    !bestIsUnsuitable &&
     best.nearestExistingJobDistanceKm !== null &&
     best.nearestExistingJobDistanceKm <= CLUSTER_DISTANCE_KM;
 

@@ -1,30 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { generateFeedToken, getCurrentProfileWithFeed } from "@/lib/calendarFeed";
+import { generateFeedToken } from "@/lib/calendarFeed";
 import { revalidatePath } from "next/cache";
 
 export interface CalendarFeedState {
   feedUrl?: string;
   error?: string;
   message?: string;
-}
-
-export async function getCalendarFeedState(): Promise<CalendarFeedState> {
-  const profile = await getCurrentProfileWithFeed();
-  if (!profile) {
-    return { error: "Not logged in" };
-  }
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
-  if (profile.calendar_feed_enabled && profile.calendar_feed_token) {
-    return {
-      feedUrl: `${baseUrl.replace(/\/$/, "")}/api/calendar/feed/${profile.calendar_feed_token}.ics`,
-    };
-  }
-
-  return {};
 }
 
 export async function enableCalendarFeed(): Promise<CalendarFeedState> {

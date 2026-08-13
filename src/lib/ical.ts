@@ -1,4 +1,15 @@
 import type { JobRecord } from "./jobs";
+import {
+  planDayClockTimes,
+  weekdayKeyOf,
+  dayHoursFromWorkingHours,
+  type Coordinates,
+  type ExistingJob,
+  type PlannedClockTime,
+  type StoredDayHours,
+  type TimeSlotType,
+  type Weekday,
+} from "./scheduling";
 
 export interface ICalEvent {
   uid: string;
@@ -21,15 +32,24 @@ function escapeICalText(text: string): string {
     .replace(/\r/g, "");
 }
 
+/** All-day VALUE=DATE calendar dates and the UTC DTSTAMP timestamp need
+ *  different readings of the same Date object: an all-day date is built
+ *  from local midnight (see jobToICalEvent), so it has to be read back with
+ *  local getters — the same convention formatICalDateTimeLocal already uses
+ *  for timed events — or a positive UTC offset silently shifts it back a
+ *  calendar day. DTSTAMP is a real UTC instant, so it correctly stays on
+ *  UTC getters. */
 function formatICalDate(date: Date, isAllDay: boolean): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-
   if (isAllDay) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
     return `${year}${month}${day}`;
   }
 
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
   const hours = String(date.getUTCHours()).padStart(2, "0");
   const minutes = String(date.getUTCMinutes()).padStart(2, "0");
   const seconds = String(date.getUTCSeconds()).padStart(2, "0");
@@ -106,34 +126,73 @@ export function generateICalFeed(
   return lines.join("\r\n") + "\r\n";
 }
 
+/**
+ * Groups a set of jobs by date and runs planDayClockTimes on each day, so
+ * every timed job gets a real, sequential, non-overlapping start/end
+ * derived from that day's actual route — instead of every job sharing its
+ * slot's flat placeholder hour (the old behavior, and the reason two
+ * "Morning" jobs used to export at the identical time). Flexible ("none")
+ * jobs still come through here — their real position and duration still
+ * have to occupy time in the chain so jobs after them land correctly — but
+ * jobToICalEvent below deliberately ignores their entry and keeps them as
+ * an all-day event, since no real time was ever chosen for them.
+ */
+export function deriveClockTimes(
+  home: Coordinates,
+  workingHours: Record<Weekday, StoredDayHours>,
+  jobs: JobRecord[]
+): Map<string, PlannedClockTime> {
+  const byDate = new Map<string, JobRecord[]>();
+  for (const job of jobs) {
+    const dateJobs = byDate.get(job.date) ?? [];
+    dateJobs.push(job);
+    byDate.set(job.date, dateJobs);
+  }
+
+  const result = new Map<string, PlannedClockTime>();
+  for (const [date, dateJobs] of byDate) {
+    const dayHours = dayHoursFromWorkingHours(workingHours, weekdayKeyOf(date));
+    const existingJobs: ExistingJob[] = dateJobs.map((job) => ({
+      id: job.id,
+      date: job.date,
+      latitude: job.latitude,
+      longitude: job.longitude,
+      time: {
+        type: job.time_slot_type as TimeSlotType,
+        specificTime: job.specific_time ?? undefined,
+      },
+      durationMinutes: job.duration_minutes,
+      manualPosition: job.manual_position,
+    }));
+
+    for (const clockTime of planDayClockTimes(home, dayHours, existingJobs)) {
+      result.set(clockTime.jobId, clockTime);
+    }
+  }
+
+  return result;
+}
+
 export function jobToICalEvent(
   job: JobRecord,
-  baseUrl: string
+  baseUrl: string,
+  clockTime: PlannedClockTime | null
 ): ICalEvent {
   const jobDate = new Date(job.date + "T00:00:00");
   let dtStart: Date;
   let dtEnd: Date;
   let isAllDay = false;
 
-  const durationMinutes = job.duration_minutes ?? 60;
-
-  if (job.time_slot_type === "none" || job.time_slot_type === "flexible") {
+  if (job.time_slot_type === "none" || !clockTime) {
     isAllDay = true;
     dtStart = new Date(jobDate);
     dtEnd = new Date(jobDate);
     dtEnd.setDate(dtEnd.getDate() + 1);
-  } else if (job.time_slot_type === "specific" && job.specific_time) {
-    const [hours, minutes] = job.specific_time.split(":").map(Number);
-    dtStart = new Date(jobDate);
-    dtStart.setHours(hours, minutes, 0, 0);
-    dtEnd = new Date(dtStart);
-    dtEnd.setMinutes(dtEnd.getMinutes() + durationMinutes);
   } else {
-    const slotStartHours = getNamedSlotStartHours(job.time_slot_type);
     dtStart = new Date(jobDate);
-    dtStart.setHours(slotStartHours, 0, 0, 0);
-    dtEnd = new Date(dtStart);
-    dtEnd.setMinutes(dtEnd.getMinutes() + durationMinutes);
+    dtStart.setMinutes(clockTime.startMinutes);
+    dtEnd = new Date(jobDate);
+    dtEnd.setMinutes(clockTime.endMinutes);
   }
 
   const summaryParts = [job.customer_name];
@@ -160,19 +219,4 @@ export function jobToICalEvent(
     sequence: 0,
     isAllDay,
   };
-}
-
-function getNamedSlotStartHours(slot: string): number {
-  switch (slot) {
-    case "morning":
-      return 9;
-    case "afternoon":
-      return 13;
-    case "evening":
-      return 17;
-    case "night":
-      return 20;
-    default:
-      return 9;
-  }
 }

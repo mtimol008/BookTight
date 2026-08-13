@@ -17,9 +17,10 @@ export async function updateProfileBasics(
   const fullName = formData.get("fullName")?.toString().trim() ?? "";
   const businessNameRaw = formData.get("businessName")?.toString().trim() ?? "";
   const homeAddress = formData.get("homeAddress")?.toString().trim() ?? "";
+  const timezone = formData.get("timezone")?.toString().trim() ?? "";
 
-  if (!fullName || !homeAddress) {
-    return { error: "Full name and home address are both required." };
+  if (!fullName || !homeAddress || !timezone) {
+    return { error: "Full name, home address, and timezone are all required." };
   }
 
   // Re-geocode on every save, not just when the text looks different — the
@@ -46,6 +47,7 @@ export async function updateProfileBasics(
       home_latitude: geocoded.latitude,
       home_longitude: geocoded.longitude,
       business_name: businessNameRaw || null,
+      timezone,
     })
     .eq("id", user.id);
 
@@ -57,6 +59,41 @@ export async function updateProfileBasics(
   // so a changed home address needs all of them fresh.
   revalidatePath("/", "layout");
   redirect("/account");
+}
+
+/**
+ * Silently self-heals accounts still stuck on the dead 'UTC' default (see
+ * 20260812000000_signup_timezone.sql) — called once from AppShell on every
+ * page load with the browser's own detected zone. Only ever writes when
+ * the stored value is still the untouched default; never overwrites a
+ * value someone (or a previous call to this) already set for real, so a
+ * deliberate edit in Account always sticks.
+ */
+export async function syncTimezoneIfDefault(detectedTimezone: string): Promise<void> {
+  if (!detectedTimezone || detectedTimezone === "UTC") {
+    return;
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return;
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.timezone !== "UTC") {
+    return;
+  }
+
+  await supabase.from("profiles").update({ timezone: detectedTimezone }).eq("id", user.id);
+  revalidatePath("/", "layout");
 }
 
 export async function updateBusinessRules(

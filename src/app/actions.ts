@@ -14,9 +14,8 @@ import {
 import { getCurrentProfile, type ProfileRecord } from "@/lib/profiles";
 import {
   compareManualOrder,
-  DEFAULT_SCHEDULING_PREFERENCES,
+  dayHoursFromWorkingHours,
   isNamedSlot,
-  parseTimeToMinutes,
   suggestBestDay,
   formatMinutesAsClock,
   minutesToTimeValue,
@@ -79,14 +78,7 @@ export interface SuggestionResult {
 function schedulingPreferencesFromProfile(profile: ProfileRecord): SchedulingPreferences {
   const workingHours = {} as Record<Weekday, DayHours>;
   for (const day of WEEKDAY_KEYS) {
-    const raw = profile.working_hours?.[day];
-    workingHours[day] = raw
-      ? {
-          enabled: raw.enabled,
-          startMinutes: parseTimeToMinutes(raw.start),
-          endMinutes: parseTimeToMinutes(raw.end),
-        }
-      : DEFAULT_SCHEDULING_PREFERENCES.workingHours[day];
+    workingHours[day] = dayHoursFromWorkingHours(profile.working_hours, day);
   }
 
   return {
@@ -527,6 +519,10 @@ export interface ConfirmJobInput {
 }
 
 export async function confirmAndSaveJob(input: ConfirmJobInput): Promise<void> {
+  if (input.date < getTodayDateString()) {
+    throw new Error("Can't book a job on a date that's already passed.");
+  }
+
   await insertJob({
     address: input.address,
     latitude: input.latitude,
@@ -571,6 +567,15 @@ export async function updateExistingJob(
   // into an unrelated group. Read the job fresh rather than trusting
   // whatever the client last had, since it may be stale.
   const current = await getJobById(input.id);
+
+  // Only reject a date that's actually changing to a past one — a job
+  // already sitting on an earlier date this week (not yet reviewed) still
+  // needs to be editable without moving it, which is exactly the "keep
+  // current date" case the day-suggestion panel already supports.
+  if (input.date !== current?.date && input.date < getTodayDateString()) {
+    throw new Error("Can't move a job to a date that's already passed.");
+  }
+
   const movedGroups =
     !!current &&
     (current.date !== input.date || current.time_slot_type !== input.timeSlotType);

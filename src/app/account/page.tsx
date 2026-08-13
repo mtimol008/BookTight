@@ -13,9 +13,9 @@ import {
   TrashIcon,
 } from "@/components/icons";
 import { signOut } from "@/app/login/actions";
-import { getCalendarFeedState } from "@/app/account/calendar-feed/actions";
-import { getCurrentProfile } from "@/lib/profiles";
-import { createClient } from "@/lib/supabase/server";
+import type { CalendarFeedState } from "@/app/account/calendar-feed/actions";
+import { getCurrentProfileWithUser } from "@/lib/profiles";
+import { buildFeedUrl } from "@/lib/calendarFeed";
 import { formatDistance } from "@/lib/format";
 import { formatMinutesAsClock, parseTimeToMinutes, WEEKDAY_KEYS } from "@/lib/scheduling";
 
@@ -65,20 +65,24 @@ export default async function AccountPage({
   searchParams: Promise<{ securityMessage?: string }>;
 }) {
   const { securityMessage } = await searchParams;
-  const profile = await getCurrentProfile();
-  if (!profile) {
+  const result = await getCurrentProfileWithUser();
+  if (!result) {
     redirect("/login");
   }
+  const { profile, user } = result;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const displayName = profile.full_name || user?.email || "Your account";
+  const displayName = profile.full_name || user.email || "Your account";
   const workingHours = summarizeWorkingHours(profile.working_hours);
 
-  const initialFeedState = await getCalendarFeedState();
+  const initialFeedState: CalendarFeedState =
+    profile.calendar_feed_enabled && profile.calendar_feed_token
+      ? {
+          feedUrl: buildFeedUrl(
+            profile.calendar_feed_token,
+            process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+          ),
+        }
+      : {};
 
   return (
     <AppShell>

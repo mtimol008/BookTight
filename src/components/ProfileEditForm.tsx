@@ -13,6 +13,7 @@ export function ProfileEditForm({ profile }: { profile: ProfileRecord }) {
   const [state, formAction, isPending] = useActionState(updateProfileBasics, initialState);
 
   const [homeAddress, setHomeAddress] = useState(profile.home_address);
+  const [timezone, setTimezone] = useState(profile.timezone);
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,6 +109,34 @@ export function ProfileEditForm({ profile }: { profile: ProfileRecord }) {
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="field">
+        <label className="field-label" htmlFor="profile-timezone">
+          Timezone
+        </label>
+        <div className="input-wrap" style={{ display: "flex", gap: 8 }}>
+          <input
+            id="profile-timezone"
+            className="input"
+            type="text"
+            name="timezone"
+            required
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            type="button"
+            className="btn btn--outline"
+            onClick={() => setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone)}
+          >
+            Use current
+          </button>
+        </div>
+        <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
+          Controls the times shown in your calendar feed export.
+        </p>
       </div>
 
       {state.error && <p className="error-text">{state.error}</p>}

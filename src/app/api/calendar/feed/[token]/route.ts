@@ -1,6 +1,6 @@
 import { getProfileByFeedToken } from "@/lib/calendarFeed";
 import { getJobsForWeekByUserId } from "@/lib/jobs";
-import { generateICalFeed, jobToICalEvent } from "@/lib/ical";
+import { deriveClockTimes, generateICalFeed, jobToICalEvent } from "@/lib/ical";
 import { getCurrentWeekRange, getWeekRange } from "@/lib/week";
 
 export async function GET(
@@ -22,8 +22,13 @@ export async function GET(
 
   const jobs = await getJobsForWeekByUserId(profile.id, startDate, futureEndDate);
 
+  const clockTimes = deriveClockTimes(
+    { latitude: profile.home_latitude, longitude: profile.home_longitude },
+    profile.working_hours,
+    jobs
+  );
   const events = jobs.map((job) =>
-    jobToICalEvent(job, baseUrl)
+    jobToICalEvent(job, baseUrl, clockTimes.get(job.id) ?? null)
   );
 
   const icsContent = generateICalFeed(events, profile.timezone);

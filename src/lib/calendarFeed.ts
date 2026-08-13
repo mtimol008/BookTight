@@ -1,5 +1,8 @@
-import { createClient } from "./supabase/server";
 import { createAdminClient } from "./supabase/admin";
+import type { StoredDayHours, Weekday } from "./scheduling";
+
+const PROFILE_COLUMNS =
+  "id, calendar_feed_token, calendar_feed_enabled, timezone, home_latitude, home_longitude, working_hours";
 
 export interface CalendarFeedProfile {
   id: string;
@@ -8,6 +11,7 @@ export interface CalendarFeedProfile {
   timezone: string;
   home_latitude: number;
   home_longitude: number;
+  working_hours: Record<Weekday, StoredDayHours>;
 }
 
 /**
@@ -22,7 +26,7 @@ export async function getProfileByFeedToken(token: string): Promise<CalendarFeed
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, calendar_feed_token, calendar_feed_enabled, timezone, home_latitude, home_longitude")
+    .select(PROFILE_COLUMNS)
     .eq("calendar_feed_token", token)
     .maybeSingle();
 
@@ -32,29 +36,6 @@ export async function getProfileByFeedToken(token: string): Promise<CalendarFeed
 
   if (!data || !data.calendar_feed_enabled) {
     return null;
-  }
-
-  return data;
-}
-
-export async function getCurrentProfileWithFeed(): Promise<CalendarFeedProfile | null> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return null;
-  }
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, calendar_feed_token, calendar_feed_enabled, timezone, home_latitude, home_longitude")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Failed to fetch profile: ${error.message}`);
   }
 
   return data;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useActionState } from "react";
+import { useEffect, useRef, useState, useActionState } from "react";
 import { signUp, type SignUpState } from "@/app/signup/actions";
 import { getAddressSuggestions } from "@/app/actions";
 import { PinIcon } from "@/components/icons";
@@ -12,6 +12,13 @@ export function SignUpForm() {
   const [state, formAction, isPending] = useActionState(signUp, initialState);
 
   const [homeAddress, setHomeAddress] = useState("");
+  // Empty until after mount, then filled from the browser — set this way
+  // (not read directly during render) so server and client render the same
+  // initial HTML and React doesn't warn about a hydration mismatch.
+  const [timezone, setTimezone] = useState("");
+  useEffect(() => {
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  }, []);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -48,6 +55,7 @@ export function SignUpForm() {
 
   return (
     <form action={formAction}>
+      <input type="hidden" name="timezone" value={timezone} />
       <div className="field">
         <label className="field-label" htmlFor="signup-name">
           Full name

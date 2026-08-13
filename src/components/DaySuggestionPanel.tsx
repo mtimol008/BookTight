@@ -9,6 +9,7 @@ import {
 } from "@/app/actions";
 import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import { ASSUMED_JOB_DURATION_MINUTES, type DayRoute, type TimeSlotType } from "@/lib/scheduling";
+import { getTodayDateString } from "@/lib/week";
 
 function dayDetailLine(day: DayRoute, unit: DistanceUnit): string {
   const jobLabel = `${day.jobCount} job${day.jobCount === 1 ? "" : "s"}`;
@@ -364,8 +365,12 @@ export function DaySuggestionPanel({
       dayInfo &&
       suggestion.maxJobsPerDay !== null &&
       dayInfo.jobCount >= suggestion.maxJobsPerDay;
+    const hasUnbookableWarning = dayInfo?.timeOption && !dayInfo.timeOption.fits;
 
-    if (dayInfo && (hasDistanceWarning || hasTimeWarning || hasCapacityWarning)) {
+    if (
+      dayInfo &&
+      (hasDistanceWarning || hasTimeWarning || hasCapacityWarning || hasUnbookableWarning)
+    ) {
       setWarningDay(dayInfo);
       return;
     }
@@ -513,6 +518,7 @@ export function DaySuggestionPanel({
             <input
               className="input"
               type="date"
+              min={getTodayDateString()}
               value={customDate}
               onChange={(e) => handleCustomDateChange(e.target.value)}
             />
@@ -556,6 +562,12 @@ export function DaySuggestionPanel({
               {Math.round(warningDay.timeFeasibility.nextTravelMinutes ?? 0)}-minute drive to
               your next job that day — but they&apos;re only booked{" "}
               {Math.round(warningDay.timeFeasibility.nextGapMinutes ?? 0)} minutes apart.
+            </p>
+          )}
+          {warningDay.timeOption && !warningDay.timeOption.fits && (
+            <p>
+              {selectedDayTimeSuggestion?.reasoning ??
+                "This day doesn't have room for this job once travel time and working hours are counted."}
             </p>
           )}
           <button

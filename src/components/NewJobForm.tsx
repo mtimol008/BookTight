@@ -15,6 +15,7 @@ import { PinIcon } from "@/components/icons";
 import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import type { AddressSuggestion } from "@/lib/geocoding";
 import { ASSUMED_JOB_DURATION_MINUTES, type DayRoute, type TimeSlotType } from "@/lib/scheduling";
+import { getTodayDateString } from "@/lib/week";
 
 const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
   { value: "morning", label: "Morning" },
@@ -358,8 +359,12 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
       dayInfo &&
       suggestion.maxJobsPerDay !== null &&
       dayInfo.jobCount >= suggestion.maxJobsPerDay;
+    const hasUnbookableWarning = dayInfo?.timeOption && !dayInfo.timeOption.fits;
 
-    if (dayInfo && (hasDistanceWarning || hasTimeWarning || hasCapacityWarning)) {
+    if (
+      dayInfo &&
+      (hasDistanceWarning || hasTimeWarning || hasCapacityWarning || hasUnbookableWarning)
+    ) {
       setWarningDay(dayInfo);
       return;
     }
@@ -649,6 +654,7 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
                     id="job-custom-date"
                     className="input"
                     type="date"
+                    min={getTodayDateString()}
                     value={customDate}
                     onChange={(e) => handleCustomDateChange(e.target.value)}
                   />
@@ -693,6 +699,12 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
                   drive to your next job that day — but they&apos;re only booked{" "}
                   {Math.round(warningDay.timeFeasibility.nextGapMinutes ?? 0)} minutes
                   apart.
+                </p>
+              )}
+              {warningDay.timeOption && !warningDay.timeOption.fits && (
+                <p>
+                  {selectedDayTimeSuggestion?.reasoning ??
+                    "This day doesn't have room for this job once travel time and working hours are counted."}
                 </p>
               )}
               <button

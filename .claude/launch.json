@@ -6,6 +6,12 @@
       "runtimeExecutable": "C:\\Users\\ussit\\Desktop\\booktight-app\\.claude\\dev-with-path.bat",
       "runtimeArgs": [],
       "port": 3000
+    },
+    {
+      "name": "booktight-prod",
+      "runtimeExecutable": "C:\\Users\\ussit\\Desktop\\booktight-app\\.claude\\start-with-path.bat",
+      "runtimeArgs": [],
+      "port": 3000
     }
   ]
 }

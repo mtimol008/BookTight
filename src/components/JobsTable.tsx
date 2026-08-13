@@ -24,6 +24,7 @@ import {
   type ManualOrderComparison,
   type TimeSlotType,
 } from "@/lib/scheduling";
+import { getTodayDateString } from "@/lib/week";
 
 const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
   { value: "none", label: "Flexible" },
@@ -326,6 +327,7 @@ export function JobsTable({
     if (!editValues) return;
 
     const addressChanged = editValues.address.trim() !== job.address.trim();
+    const dateChanged = editValues.date !== job.date;
     const timeChanged =
       editValues.timeSlotType !== job.time_slot_type ||
       (editValues.timeSlotType === "specific" &&
@@ -333,7 +335,7 @@ export function JobsTable({
     const durationChanged =
       editValues.durationMinutesInput.trim() !== (job.duration_minutes?.toString() ?? "");
 
-    if (!addressChanged && !timeChanged && !durationChanged) {
+    if (!addressChanged && !dateChanged && !timeChanged && !durationChanged) {
       doSave(job, editValues.date, {
         type: editValues.timeSlotType,
         specificTime:
@@ -364,10 +366,12 @@ export function JobsTable({
         );
         setDaySuggestion(result);
 
-        // The current date might not be among the ranked candidates. Fetch
-        // its real info on demand so "keep the current date" never shows
-        // blank or broken detail.
-        if (result.allDays.some((d) => d.date === editValues.date)) {
+        // The job's own current date might not be among the ranked
+        // candidates. Fetch its real info on demand so "keep the current
+        // date" never shows blank or broken detail. This is job.date (the
+        // committed value), not editValues.date — the date field may
+        // already hold a not-yet-saved pick by the time this runs.
+        if (result.allDays.some((d) => d.date === job.date)) {
           setCurrentDateOnDemandInfo(null);
         } else {
           try {
@@ -380,7 +384,7 @@ export function JobsTable({
                     ? editValues.specificTime
                     : undefined,
               },
-              editValues.date,
+              job.date,
               job.id,
               durationMinutes
             );
@@ -671,7 +675,7 @@ export function JobsTable({
                                 ? Number(editValues.durationMinutesInput)
                                 : null
                             }
-                            currentDate={editValues.date}
+                            currentDate={job.date}
                             currentDateInfo={currentDateOnDemandInfo}
                             requestedTimeLabel={
                               editValues.timeSlotType === "specific" &&
@@ -793,6 +797,7 @@ export function JobsTable({
                               className="input"
                               type="date"
                               placeholder="Select a date"
+                              min={getTodayDateString()}
                               value={editValues.date}
                               onChange={(e) =>
                                 setEditValues({ ...editValues, date: e.target.value })

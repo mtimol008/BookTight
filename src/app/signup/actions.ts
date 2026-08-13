@@ -19,7 +19,8 @@ export async function signUp(
   const password = formData.get("password")?.toString() ?? "";
   const confirmPassword = formData.get("confirmPassword")?.toString() ?? "";
   const homeAddress = formData.get("homeAddress")?.toString().trim() ?? "";
- 
+  const timezone = formData.get("timezone")?.toString().trim() || undefined;
+
   if (!fullName || !email || !password || !confirmPassword || !homeAddress) {
     return { error: "Full name, email, password, confirmation, and home address are all required." };
   }
@@ -55,6 +56,11 @@ export async function signUp(
         home_address: geocoded.formattedAddress,
         home_latitude: geocoded.latitude,
         home_longitude: geocoded.longitude,
+        // Undefined (JS disabled, very old cached page) omits the key
+        // entirely rather than sending the literal string "undefined" —
+        // the handle_new_user trigger's own coalesce(..., 'UTC') covers
+        // that case.
+        timezone,
       },
     },
   });

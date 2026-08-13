@@ -79,10 +79,12 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          <form
+            action={feedAction}
+            style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}
+          >
             <button
               type="submit"
-              formAction={feedAction}
               className="btn btn--outline"
               disabled={isPending}
               name="action"
@@ -93,7 +95,6 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
             </button>
             <button
               type="submit"
-              formAction={feedAction}
               className="btn btn--danger"
               disabled={isPending}
               name="action"
@@ -111,7 +112,7 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
               <ExternalLinkIcon />
               Test in Browser
             </a>
-          </div>
+          </form>
 
           <details className="instructions" style={{ marginTop: 16 }}>
             <summary style={{ cursor: "pointer", fontWeight: 500 }}>

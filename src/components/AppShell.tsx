@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
+import { syncTimezoneIfDefault } from "@/app/account/actions";
 
 function WeekIcon() {
   return (
@@ -82,6 +83,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       document.removeEventListener("focusout", onFocusOut);
       delete document.body.dataset.fieldFocused;
     };
+  }, []);
+
+  // One-time self-heal for accounts still stuck on the dead 'UTC' default
+  // (see 20260812000000_signup_timezone.sql) — silently corrects it using
+  // the browser's real zone. No-ops once the stored value is anything else,
+  // including a deliberate manual edit in Account.
+  useEffect(() => {
+    syncTimezoneIfDefault(Intl.DateTimeFormat().resolvedOptions().timeZone).catch(() => {});
   }, []);
 
   return (
