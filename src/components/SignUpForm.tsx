@@ -195,11 +195,7 @@ export function SignUpForm() {
         <p className="error-text">Passwords do not match.</p>
       )}
       {state.error && <p className="error-text">{state.error}</p>}
-      {state.message && (
-        <p className="error-text" style={{ color: "var(--success)" }}>
-          {state.message}
-        </p>
-      )}
+      {state.message && <p className="success-text">{state.message}</p>}
 
       <button type="submit" className="btn btn--primary btn--block" disabled={isPending}>
         {isPending ? "Creating account..." : "Create Account"}

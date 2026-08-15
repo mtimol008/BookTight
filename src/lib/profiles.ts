@@ -1,5 +1,5 @@
 import type { User } from "@supabase/supabase-js";
-import { createClient } from "./supabase/server";
+import { createClient, withAuthRetry } from "./supabase/server";
 import type { DistanceUnit } from "./format";
 import type { Weekday } from "./scheduling";
 
@@ -38,11 +38,9 @@ export async function getCurrentProfile(): Promise<ProfileRecord | null> {
     return null;
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data, error } = await withAuthRetry(() =>
+    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
+  );
 
   if (error) {
     throw new Error(`Failed to fetch profile: ${error.message}`);
@@ -74,11 +72,9 @@ export async function getCurrentProfileWithUser(): Promise<
     return null;
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data, error } = await withAuthRetry(() =>
+    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
+  );
 
   if (error) {
     throw new Error(`Failed to fetch profile: ${error.message}`);

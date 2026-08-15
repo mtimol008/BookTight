@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { DayRouteSummary, type DayRouteSummaryStop } from "@/components/DayRouteSummary";
 import { BackIcon, ForwardIcon } from "@/components/icons";
 import { MONTH_GRID_WEEKDAY_LABELS, formatMonthTitle } from "@/lib/format";
-import { getJobsForWeek, type JobRecord } from "@/lib/jobs";
+import { getDayReviewStatus, getJobsForWeek, type JobRecord } from "@/lib/jobs";
 import { getCurrentProfile } from "@/lib/profiles";
 import { planDayRoute, type ExistingJob, type TimeSlotType } from "@/lib/scheduling";
 import {
@@ -107,6 +107,9 @@ export default async function CalendarPage({
     selectedDayJobs,
     home
   );
+  const selectedDayReviewStatus = selectedDate
+    ? getDayReviewStatus(selectedDate, selectedDayJobs, today)
+    : "none";
 
   const prevMonthHref = `/calendar?month=${formatMonthParam(shiftMonth(monthDate, -1))}`;
   const nextMonthHref = `/calendar?month=${formatMonthParam(shiftMonth(monthDate, 1))}`;
@@ -148,16 +151,20 @@ export default async function CalendarPage({
         ))}
 
         {monthDates.map((date) => {
-          const count = jobsByDate.get(date)?.length ?? 0;
+          const dateJobs = jobsByDate.get(date) ?? [];
+          const count = dateJobs.length;
           const isToday = date === today;
           const isSelected = date === selectedDate;
           const dayNumber = Number(date.slice(-2));
+          const reviewStatus = getDayReviewStatus(date, dateJobs, today);
 
           return (
             <Link
               key={date}
               href={`/calendar?month=${monthParamValue}&date=${date}`}
               className={`month-cell${isToday ? " month-cell--today" : ""}${
+                reviewStatus === "needs-review" ? " month-cell--needs-review" : ""
+              }${reviewStatus === "reviewed" ? " month-cell--reviewed" : ""}${
                 isSelected ? " month-cell--selected" : ""
               }`}
             >
@@ -185,6 +192,7 @@ export default async function CalendarPage({
           returnHomeKm={returnHomeKm}
           totalDistanceKm={totalDistanceKm}
           distanceUnit={profile?.distance_unit ?? "km"}
+          reviewStatus={selectedDayReviewStatus}
         />
       )}
     </AppShell>

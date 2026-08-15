@@ -91,7 +91,7 @@ export default async function AccountPage({
       </div>
 
       {securityMessage && (
-        <p className="error-text" style={{ color: "var(--success)", marginTop: 12 }}>
+        <p className="success-text" style={{ marginTop: 12 }}>
           {securityMessage}
         </p>
       )}

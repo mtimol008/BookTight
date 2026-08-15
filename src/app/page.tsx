@@ -5,7 +5,12 @@ import { AccountCircleIcon, PlusIcon } from "@/components/icons";
 import JobsTableClient from "@/components/JobsTableClient";
 import type { DayPlan } from "@/components/JobsTable";
 import { formatDateRange, formatShortDate } from "@/lib/format";
-import { getJobsForWeek, getUnreviewedSummary, type JobRecord } from "@/lib/jobs";
+import {
+  getDayReviewStatus,
+  getJobsForWeek,
+  getUnreviewedSummary,
+  type JobRecord,
+} from "@/lib/jobs";
 import { getCurrentProfile } from "@/lib/profiles";
 import { planDayRoute, type ExistingJob, type TimeSlotType } from "@/lib/scheduling";
 import { getCurrentWeekRange } from "@/lib/week";
@@ -43,6 +48,7 @@ function buildDayPlans(
         })),
         returnHomeKm: null,
         totalDistanceKm: null,
+        reviewStatus: getDayReviewStatus(date, dayJobs),
       };
     }
 
@@ -71,6 +77,7 @@ function buildDayPlans(
       })),
       returnHomeKm: route.returnHomeKm,
       totalDistanceKm: route.totalDistanceKm,
+      reviewStatus: getDayReviewStatus(date, dayJobs),
     };
   });
 }

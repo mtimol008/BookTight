@@ -16,7 +16,7 @@ export function DeleteAccountForm({ email }: { email: string }) {
 
   return (
     <form action={formAction}>
-      <p style={{ marginTop: 0 }}>
+      <p style={{ marginBottom: 16 }}>
         This permanently deletes your Booktight account, including every
         job you've booked. There's no undo.
       </p>

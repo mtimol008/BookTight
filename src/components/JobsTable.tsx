@@ -17,9 +17,11 @@ import { DaySuggestionPanel, type TimeSelection } from "@/components/DaySuggesti
 import { DragHandleIcon, PinIcon } from "@/components/icons";
 import { formatDayHeading, formatDistance, type DistanceUnit } from "@/lib/format";
 import type { AddressSuggestion } from "@/lib/geocoding";
-import type { JobRecord } from "@/lib/jobs";
+import type { DayReviewStatus, JobRecord } from "@/lib/jobs";
 import {
   ASSUMED_JOB_DURATION_MINUTES,
+  formatMinutesAsClock,
+  parseTimeToMinutes,
   type DayRoute,
   type ManualOrderComparison,
   type TimeSlotType,
@@ -41,7 +43,9 @@ function timeSlotLabel(type: TimeSlotType): string {
 
 function jobTimeLabel(job: JobRecord): string {
   return job.time_slot_type === "specific"
-    ? job.specific_time ?? ""
+    ? job.specific_time
+      ? formatMinutesAsClock(parseTimeToMinutes(job.specific_time))
+      : ""
     : timeSlotLabel(job.time_slot_type as TimeSlotType);
 }
 
@@ -65,6 +69,7 @@ export interface DayPlan {
   }[];
   returnHomeKm: number | null;
   totalDistanceKm: number | null;
+  reviewStatus: DayReviewStatus;
 }
 
 function formatDistanceForUnit(distanceKm: number | null, unit: DistanceUnit): string {
@@ -603,6 +608,9 @@ export function JobsTable({
                   {day.stops.length} stop{day.stops.length === 1 ? "" : "s"}
                 </span>
                 {allCompleted && <span className="badge badge--success">✓ All done</span>}
+                {day.reviewStatus === "needs-review" && (
+                  <span className="badge">Needs review</span>
+                )}
               </div>
               <button
                 type="button"
@@ -680,7 +688,7 @@ export function JobsTable({
                             requestedTimeLabel={
                               editValues.timeSlotType === "specific" &&
                               editValues.specificTime
-                                ? editValues.specificTime
+                                ? formatMinutesAsClock(parseTimeToMinutes(editValues.specificTime))
                                 : timeSlotLabel(editValues.timeSlotType)
                             }
                             isSaving={isSaving}

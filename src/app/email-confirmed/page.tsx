@@ -11,7 +11,7 @@ export default function EmailConfirmedPage() {
       </div>
 
       <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
-        <h1 style={{ marginBottom: 18 }}>Email confirmed</h1>
+        <h1 className="screen-title" style={{ marginBottom: 18 }}>Email confirmed</h1>
         <p style={{ marginBottom: 20 }}>
           Thanks — your email address is now confirmed. You can sign in and start using Booktight.
         </p>

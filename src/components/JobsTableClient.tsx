@@ -8,7 +8,11 @@ const JobsTable = dynamic<{ days: DayPlan[]; distanceUnit: DistanceUnit }>(
   () => import("@/components/JobsTable").then((mod) => mod.JobsTable),
   {
     ssr: false,
-    loading: () => <div>Loading jobs...</div>,
+    loading: () => (
+      <div className="route-loading" aria-live="polite" aria-busy="true">
+        <span className="route-loading-spinner" />
+      </div>
+    ),
   }
 );
 

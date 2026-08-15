@@ -12,7 +12,12 @@ import {
 import { DaySuggestionPanel, type TimeSelection } from "@/components/DaySuggestionPanel";
 import { CheckIcon } from "@/components/icons";
 import type { JobRecord } from "@/lib/jobs";
-import { ASSUMED_JOB_DURATION_MINUTES, type TimeSlotType } from "@/lib/scheduling";
+import {
+  ASSUMED_JOB_DURATION_MINUTES,
+  formatMinutesAsClock,
+  parseTimeToMinutes,
+  type TimeSlotType,
+} from "@/lib/scheduling";
 
 const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
   { value: "morning", label: "Morning" },
@@ -29,7 +34,9 @@ function timeSlotLabel(type: TimeSlotType): string {
 
 function jobTimeLabel(job: JobRecord): string {
   return job.time_slot_type === "specific"
-    ? job.specific_time ?? "specific time"
+    ? job.specific_time
+      ? formatMinutesAsClock(parseTimeToMinutes(job.specific_time))
+      : "specific time"
     : timeSlotLabel(job.time_slot_type as TimeSlotType);
 }
 
@@ -319,72 +326,100 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
 
           {reschedulingId === job.id ? (
             <>
-              {timeSlotType === "specific" && !specificTime && (
-                <p className="note">Pick a time to see which days it fits.</p>
-              )}
-              {isLoadingSuggestion && <p className="note">Working out the best day...</p>}
-              {suggestion && (
-                <DaySuggestionPanel
-                  suggestion={suggestion}
-                  jobId={job.id}
-                  requestedTime={{ type: timeSlotType, specificTime }}
-                  durationMinutes={parseDurationInput(durationMinutesInput)}
-                  // The day it was booked for has been and gone, so
-                  // "keep it" isn't a meaningful option here.
-                  currentDate={null}
-                  currentDateInfo={null}
-                  requestedTimeLabel={
-                    timeSlotType === "specific" && specificTime
-                      ? specificTime
-                      : timeSlotLabel(timeSlotType)
-                  }
-                  timeControl={
-                    <>
-                      <span className="field-label">Time</span>
-                      <div className="chips">
-                        {TIME_SLOT_OPTIONS.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={`chip${
-                              timeSlotType === option.value ? " is-selected" : ""
-                            }`}
-                            onClick={() => handleTimeSlotTypeChange(job, option.value)}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                      {timeSlotType === "specific" && (
-                        <input
-                          className="input input--time"
-                          style={{ marginTop: 8 }}
-                          type="time"
-                          placeholder="Select a time"
-                          value={specificTime}
-                          onChange={(e) => handleSpecificTimeChange(job, e.target.value)}
-                        />
-                      )}
-                      <span className="field-label" style={{ marginTop: 10, display: "block" }}>
-                        Duration (minutes)
-                      </span>
+              {(() => {
+                // Built once and reused: passed into DaySuggestionPanel once a
+                // suggestion exists (so day and time sit together), but also
+                // rendered directly below while none exists yet — otherwise
+                // picking "Specific" with no time set yet (which holds off
+                // fetching a suggestion) would hide the very controls needed
+                // to enter a time or switch away, leaving no way out short of
+                // cancelling the whole reschedule.
+                const timeControlNode = (
+                  <>
+                    <span className="field-label">Time</span>
+                    <div className="chips">
+                      {TIME_SLOT_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`chip${
+                            timeSlotType === option.value ? " is-selected" : ""
+                          }`}
+                          onClick={() => handleTimeSlotTypeChange(job, option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    {timeSlotType === "specific" && (
                       <input
-                        className="input"
-                        type="number"
-                        min={1}
-                        step="1"
-                        placeholder={`Defaults to ${ASSUMED_JOB_DURATION_MINUTES} min`}
-                        value={durationMinutesInput}
-                        onChange={(e) => handleDurationChange(job, e.target.value)}
+                        className="input input--time"
+                        style={{ marginTop: 8 }}
+                        type="time"
+                        placeholder="Select a time"
+                        value={specificTime}
+                        onChange={(e) => handleSpecificTimeChange(job, e.target.value)}
                       />
-                    </>
-                  }
-                  isSaving={isResolving}
-                  onConfirm={(newDate, time) =>
-                    handleRescheduleConfirm(job, newDate, time)
-                  }
-                />
-              )}
+                    )}
+                    <span className="field-label" style={{ marginTop: 10, display: "block" }}>
+                      Duration (minutes)
+                    </span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={1}
+                      step="1"
+                      placeholder={`Defaults to ${ASSUMED_JOB_DURATION_MINUTES} min`}
+                      value={durationMinutesInput}
+                      onChange={(e) => handleDurationChange(job, e.target.value)}
+                    />
+                  </>
+                );
+
+                if (!suggestion) {
+                  return (
+                    <div className="field">
+                      {timeControlNode}
+                      {timeSlotType === "specific" && !specificTime && (
+                        <p className="note" style={{ marginTop: 10 }}>
+                          Pick a time to see which days it fits.
+                        </p>
+                      )}
+                      {isLoadingSuggestion && (
+                        <p className="note" style={{ marginTop: 10 }}>
+                          Working out the best day...
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <>
+                    {isLoadingSuggestion && <p className="note">Working out the best day...</p>}
+                    <DaySuggestionPanel
+                      suggestion={suggestion}
+                      jobId={job.id}
+                      requestedTime={{ type: timeSlotType, specificTime }}
+                      durationMinutes={parseDurationInput(durationMinutesInput)}
+                      // The day it was booked for has been and gone, so
+                      // "keep it" isn't a meaningful option here.
+                      currentDate={null}
+                      currentDateInfo={null}
+                      requestedTimeLabel={
+                        timeSlotType === "specific" && specificTime
+                          ? formatMinutesAsClock(parseTimeToMinutes(specificTime))
+                          : timeSlotLabel(timeSlotType)
+                      }
+                      timeControl={timeControlNode}
+                      isSaving={isResolving}
+                      onConfirm={(newDate, time) =>
+                        handleRescheduleConfirm(job, newDate, time)
+                      }
+                    />
+                  </>
+                );
+              })()}
               <button
                 type="button"
                 className="btn btn--outline btn--block btn--sm"

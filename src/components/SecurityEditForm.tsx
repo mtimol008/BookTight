@@ -97,11 +97,7 @@ export function SecurityEditForm({ email }: { email: string }) {
       {(clientError || state.error) && (
         <p className="error-text">{clientError ?? state.error}</p>
       )}
-      {state.message && (
-        <p className="error-text" style={{ color: "var(--success)" }}>
-          {state.message}
-        </p>
-      )}
+      {state.message && <p className="success-text">{state.message}</p>}
 
       <button type="submit" className="btn btn--primary btn--block" disabled={isPending}>
         {isPending ? "Saving..." : "Save Changes"}

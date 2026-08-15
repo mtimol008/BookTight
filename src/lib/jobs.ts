@@ -1,5 +1,5 @@
 import { getTodayDateString } from "./week";
-import { createClient } from "./supabase/server";
+import { createClient, withAuthRetry } from "./supabase/server";
 import { createAdminClient } from "./supabase/admin";
 
 export type JobStatus = "scheduled" | "completed" | "cancelled";
@@ -36,13 +36,15 @@ export async function getJobsForWeek(
 ): Promise<JobRecord[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("jobs")
-    .select("*")
-    .gte("date", startDate)
-    .lte("date", endDate)
-    .neq("status", "cancelled")
-    .order("date", { ascending: true });
+  const { data, error } = await withAuthRetry(() =>
+    supabase
+      .from("jobs")
+      .select("*")
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .neq("status", "cancelled")
+      .order("date", { ascending: true })
+  );
 
   if (error) {
     throw new Error(`Failed to fetch jobs: ${error.message}`);
@@ -131,12 +133,14 @@ export interface UnreviewedSummary {
 export async function getUnreviewedSummary(): Promise<UnreviewedSummary | null> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("jobs")
-    .select("date")
-    .eq("status", "scheduled")
-    .lt("date", getTodayDateString())
-    .order("date", { ascending: true });
+  const { data, error } = await withAuthRetry(() =>
+    supabase
+      .from("jobs")
+      .select("date")
+      .eq("status", "scheduled")
+      .lt("date", getTodayDateString())
+      .order("date", { ascending: true })
+  );
 
   if (error) {
     throw new Error(`Failed to check for unreviewed jobs: ${error.message}`);
@@ -152,6 +156,34 @@ export async function getUnreviewedSummary(): Promise<UnreviewedSummary | null> 
     date: oldestDate,
     jobCount: rows.filter((row) => row.date === oldestDate).length,
   };
+}
+
+export type DayReviewStatus = "needs-review" | "reviewed" | "none";
+
+/**
+ * One day's review status, for anywhere that needs to flag it at a glance
+ * (This Week's day cards, the Calendar month grid) rather than just the
+ * single oldest day getUnreviewedSummary surfaces in the banner.
+ *
+ * "needs-review": past, and still has a job sitting at `scheduled`.
+ * "reviewed": past, had jobs, and none are left `scheduled` (all completed
+ *   — cancelled jobs never reach `jobsOnDate` in the first place, since
+ *   every caller already filters them out upstream, so a day whose only
+ *   booking was cancelled falls through to "none" rather than reading as
+ *   reviewed).
+ * "none": today, a future day, or a past day with nothing booked.
+ */
+export function getDayReviewStatus(
+  date: string,
+  jobsOnDate: JobRecord[],
+  today: string = getTodayDateString()
+): DayReviewStatus {
+  if (date >= today || jobsOnDate.length === 0) {
+    return "none";
+  }
+  return jobsOnDate.some((job) => job.status === "scheduled")
+    ? "needs-review"
+    : "reviewed";
 }
 
 /**

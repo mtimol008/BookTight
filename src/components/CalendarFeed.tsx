@@ -42,10 +42,12 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
   }
 
   return (
-    <div className="card" style={{ marginTop: 24 }}>
-      <h2 style={{ marginBottom: 16 }}>Calendar Feed</h2>
-
-      <p className="note" style={{ marginBottom: 16 }}>
+    <>
+      <div className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
+        Calendar Feed
+      </div>
+      <div className="card">
+        <p className="note" style={{ marginBottom: 16 }}>
         Subscribe to this feed in your calendar app (Apple Calendar, Google
         Calendar, Outlook) to see your Booktight jobs automatically.
       </p>
@@ -89,13 +91,14 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
               disabled={isPending}
               name="action"
               value="regenerate"
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
             >
               <RefreshIcon />
               Regenerate URL
             </button>
             <button
               type="submit"
-              className="btn btn--danger"
+              className="btn btn--warning"
               disabled={isPending}
               name="action"
               value="disable"
@@ -114,13 +117,13 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
             </a>
           </form>
 
-          <details className="instructions" style={{ marginTop: 16 }}>
-            <summary style={{ cursor: "pointer", fontWeight: 500 }}>
+          <details style={{ marginTop: 16 }}>
+            <summary className="btn--quiet" style={{ cursor: "pointer" }}>
               How to add to your calendar app
             </summary>
             <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 16 }}>
-              <div className="instruction-block">
-                <h4 style={{ marginBottom: 8 }}>Apple Calendar (iPhone/Mac)</h4>
+              <div>
+                <p className="field-label">Apple Calendar (iPhone/Mac)</p>
                 <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>
                   <li>Open <strong>Settings</strong> → <strong>Apps</strong> → <strong>Calendar</strong></li>
                   <li>Tap <strong>Calendar Accounts</strong> → <strong>Add Account</strong> → <strong>Other</strong></li>
@@ -129,17 +132,17 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
                 </ol>
               </div>
 
-              <div className="instruction-block">
-                <h4 style={{ marginBottom: 8 }}>Google Calendar (Web)</h4>
+              <div>
+                <p className="field-label">Google Calendar (Web)</p>
                 <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>
-                  <li>Go to <a href="https://calendar.google.com" target="_blank" rel="noopener">calendar.google.com</a></li>
+                  <li>Go to <a href="https://calendar.google.com" target="_blank" rel="noopener" className="text-route">calendar.google.com</a></li>
                   <li>Next to &ldquo;Other calendars&rdquo;, click <strong>+</strong> → <strong>From URL</strong></li>
                   <li>Paste the feed URL → <strong>Add calendar</strong></li>
                 </ol>
               </div>
 
-              <div className="instruction-block">
-                <h4 style={{ marginBottom: 8 }}>Outlook (Web / Windows / Mac)</h4>
+              <div>
+                <p className="field-label">Outlook (Web / Windows / Mac)</p>
                 <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>
                   <li>Open Outlook Calendar</li>
                   <li>Click <strong>Add calendar</strong> → <strong>Subscribe from web</strong></li>
@@ -147,7 +150,7 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
                 </ol>
               </div>
 
-              <p className="note">
+              <p className="note" style={{ marginBottom: 0 }}>
                 Your calendar app will refresh this feed automatically every few
                 hours. Changes in Booktight (new jobs, time changes,
                 cancellations) will appear on the next refresh.
@@ -168,6 +171,7 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
           </button>
         </form>
       )}
-    </div>
+      </div>
+    </>
   );
 }

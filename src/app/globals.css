@@ -277,6 +277,12 @@ body[data-field-focused="true"] .fab {
   margin: 8px 0;
 }
 
+.success-text {
+  color: var(--success);
+  font-size: 13px;
+  margin: 8px 0;
+}
+
 .version {
   text-align: center;
   color: var(--muted);
@@ -1195,6 +1201,19 @@ body[data-field-focused="true"] .fab {
 .month-cell--today {
   border-color: var(--accent);
   border-width: 2px;
+}
+
+/* A past day's review status — still needs attention, or fully cleared.
+   Defined before --selected so selecting a day still wins the cascade,
+   the same precedence --today already yields to. */
+.month-cell--needs-review {
+  background: var(--tint-warning);
+  border-color: rgba(201, 76, 51, 0.28);
+}
+
+.month-cell--reviewed {
+  background: var(--tint-route);
+  border-color: rgba(61, 140, 127, 0.22);
 }
 
 .month-cell--selected {

@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
-import type { JobRecord } from "@/lib/jobs";
-import type { TimeSlotType } from "@/lib/scheduling";
+import type { DayReviewStatus, JobRecord } from "@/lib/jobs";
+import { formatMinutesAsClock, parseTimeToMinutes, type TimeSlotType } from "@/lib/scheduling";
 
 const TIME_SLOT_LABELS: Record<TimeSlotType, string> = {
   none: "Flexible",
@@ -13,7 +14,9 @@ const TIME_SLOT_LABELS: Record<TimeSlotType, string> = {
 
 function jobTimeLabel(job: JobRecord): string {
   return job.time_slot_type === "specific"
-    ? job.specific_time ?? ""
+    ? job.specific_time
+      ? formatMinutesAsClock(parseTimeToMinutes(job.specific_time))
+      : ""
     : TIME_SLOT_LABELS[job.time_slot_type as TimeSlotType] ?? job.time_slot_type;
 }
 
@@ -42,22 +45,31 @@ export function DayRouteSummary({
   returnHomeKm,
   totalDistanceKm,
   distanceUnit,
+  reviewStatus,
 }: {
   date: string;
   stops: DayRouteSummaryStop[];
   returnHomeKm: number | null;
   totalDistanceKm: number | null;
   distanceUnit: DistanceUnit;
+  reviewStatus: DayReviewStatus;
 }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="day-card-head">
-        <span className="day-title">{formatSuggestionDate(date)}</span>
-        <span className="day-stops">
-          {stops.length} stop{stops.length === 1 ? "" : "s"}
-        </span>
+        <div>
+          <span className="day-title">{formatSuggestionDate(date)}</span>{" "}
+          <span className="day-stops">
+            {stops.length} stop{stops.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {reviewStatus === "needs-review" && (
+          <Link href={`/review/${date}`} className="btn btn--warning btn--sm btn--pill">
+            Review
+          </Link>
+        )}
       </div>
-      {totalDistanceKm !== null && (
+      {totalDistanceKm !== null && stops.length > 0 && (
         <div className="day-distance">
           {formatDistanceForUnit(totalDistanceKm, distanceUnit)} round trip
         </div>
