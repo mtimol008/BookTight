@@ -7,13 +7,16 @@ import {
   markJobCancelled,
   markJobsCompleted,
   updateExistingJob,
+  type AhaMomentPayload,
   type SuggestionResult,
 } from "@/app/actions";
+import { AhaMomentModal } from "@/components/AhaMomentModal";
 import { DaySuggestionPanel, type TimeSelection } from "@/components/DaySuggestionPanel";
+import { DurationFields } from "@/components/DurationFields";
 import { CheckIcon } from "@/components/icons";
+import type { DistanceUnit } from "@/lib/format";
 import type { JobRecord } from "@/lib/jobs";
 import {
-  ASSUMED_JOB_DURATION_MINUTES,
   formatMinutesAsClock,
   parseTimeToMinutes,
   type TimeSlotType,
@@ -25,6 +28,7 @@ const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
   { value: "evening", label: "Evening" },
   { value: "night", label: "Night" },
   { value: "specific", label: "Specific" },
+  { value: "all_day", label: "All day" },
   { value: "none", label: "Flexible" },
 ];
 
@@ -40,8 +44,11 @@ function jobTimeLabel(job: JobRecord): string {
     : timeSlotLabel(job.time_slot_type as TimeSlotType);
 }
 
-/** Blank means "use the flat default" everywhere this is threaded through. */
-function parseDurationInput(value: string): number | null {
+/** Blank means "use the flat default" everywhere this is threaded through.
+ *  Forced null for an all-day job regardless of whatever's left in the
+ *  (hidden, not cleared) duration input from before it was selected. */
+function parseDurationInput(timeSlotType: TimeSlotType, value: string): number | null {
+  if (timeSlotType === "all_day") return null;
   return value.trim() ? Number(value) : null;
 }
 
@@ -52,8 +59,17 @@ function parseDurationInput(value: string): number | null {
  * whatever didn't. The day is finished when nothing on it is left at
  * `scheduled` — there's no separate "reviewed" flag to keep in sync.
  */
-export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
+export function DayReview({
+  date,
+  jobs,
+  distanceUnit,
+}: {
+  date: string;
+  jobs: JobRecord[];
+  distanceUnit: DistanceUnit;
+}) {
   const router = useRouter();
+  const [ahaMoment, setAhaMoment] = useState<AhaMomentPayload | null>(null);
 
   const [phase, setPhase] = useState<"check" | "resolve">("check");
   // Assume completed — unticking is the exception, not the rule.
@@ -120,7 +136,7 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
     });
   }
 
-  function removePending(jobId: string) {
+  function removePending(jobId: string, deferNavigation = false) {
     // finishIfDone (router.push/refresh) has to run as a plain statement
     // here, not inside the setPending updater above — that updater runs
     // during React's render phase, and triggering another component's
@@ -133,7 +149,12 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
     setPending(remaining);
     setReschedulingId(null);
     setSuggestion(null);
-    finishIfDone(remaining);
+    // Deferred when there's an aha-moment celebration to show first —
+    // navigating away immediately would unmount this screen before the
+    // user ever saw it. dismissAhaMoment finishes the job once it closes.
+    if (!deferNavigation) {
+      finishIfDone(remaining);
+    }
   }
 
   function handleDiscard(job: JobRecord) {
@@ -207,13 +228,13 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
   function handleTimeSlotTypeChange(job: JobRecord, type: TimeSlotType) {
     setError(null);
     setTimeSlotType(type);
-    loadSuggestion(job, type, specificTime, parseDurationInput(durationMinutesInput));
+    loadSuggestion(job, type, specificTime, parseDurationInput(type, durationMinutesInput));
   }
 
   function handleSpecificTimeChange(job: JobRecord, time: string) {
     setError(null);
     setSpecificTime(time);
-    loadSuggestion(job, timeSlotType, time, parseDurationInput(durationMinutesInput));
+    loadSuggestion(job, timeSlotType, time, parseDurationInput(timeSlotType, durationMinutesInput));
   }
 
   // Debounced, unlike the time/type handlers above — those fire on a
@@ -228,7 +249,7 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
       clearTimeout(durationDebounceRef.current);
     }
     durationDebounceRef.current = setTimeout(() => {
-      loadSuggestion(job, timeSlotType, specificTime, parseDurationInput(value));
+      loadSuggestion(job, timeSlotType, specificTime, parseDurationInput(timeSlotType, value));
     }, 500);
   }
 
@@ -237,7 +258,7 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
     startResolving(async () => {
       try {
         // Updates the existing row rather than creating a second job.
-        await updateExistingJob({
+        const aha = await updateExistingJob({
           id: job.id,
           address: job.address,
           date: newDate,
@@ -245,13 +266,21 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
           specificTime: time.specificTime,
           customerName: job.customer_name,
           description: job.description ?? "",
-          durationMinutes: parseDurationInput(durationMinutesInput),
+          durationMinutes: parseDurationInput(time.type, durationMinutesInput),
         });
-        removePending(job.id);
+        removePending(job.id, !!aha);
+        if (aha) {
+          setAhaMoment(aha);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to reschedule the job.");
       }
     });
+  }
+
+  function dismissAhaMoment() {
+    setAhaMoment(null);
+    finishIfDone(pending);
   }
 
   if (phase === "check") {
@@ -306,6 +335,7 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
   }
 
   return (
+    <>
     <div>
       {error && <p className="error-text">{error}</p>}
       <div className="section-label" style={{ marginBottom: 10 }}>
@@ -361,18 +391,20 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
                         onChange={(e) => handleSpecificTimeChange(job, e.target.value)}
                       />
                     )}
-                    <span className="field-label" style={{ marginTop: 10, display: "block" }}>
-                      Duration (minutes)
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      min={1}
-                      step="1"
-                      placeholder={`Defaults to ${ASSUMED_JOB_DURATION_MINUTES} min`}
-                      value={durationMinutesInput}
-                      onChange={(e) => handleDurationChange(job, e.target.value)}
-                    />
+                    {timeSlotType !== "all_day" && (
+                      <>
+                        <span
+                          className="field-label"
+                          style={{ marginTop: 10, display: "block" }}
+                        >
+                          Duration
+                        </span>
+                        <DurationFields
+                          value={durationMinutesInput}
+                          onChange={(value) => handleDurationChange(job, value)}
+                        />
+                      </>
+                    )}
                   </>
                 );
 
@@ -401,7 +433,7 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
                       suggestion={suggestion}
                       jobId={job.id}
                       requestedTime={{ type: timeSlotType, specificTime }}
-                      durationMinutes={parseDurationInput(durationMinutesInput)}
+                      durationMinutes={parseDurationInput(timeSlotType, durationMinutesInput)}
                       // The day it was booked for has been and gone, so
                       // "keep it" isn't a meaningful option here.
                       currentDate={null}
@@ -456,5 +488,13 @@ export function DayReview({ date, jobs }: { date: string; jobs: JobRecord[] }) {
         </div>
       ))}
     </div>
+    {ahaMoment && (
+      <AhaMomentModal
+        payload={ahaMoment}
+        distanceUnit={distanceUnit}
+        onDismiss={dismissAhaMoment}
+      />
+    )}
+    </>
   );
 }

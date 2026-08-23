@@ -3,6 +3,23 @@ import { createClient, withAuthRetry } from "./supabase/server";
 import type { DistanceUnit } from "./format";
 import type { Weekday } from "./scheduling";
 
+/**
+ * First-time engagement flags, all optional — absent means "hasn't
+ * happened yet". One flexible bag rather than a column per flag (same
+ * pattern as working_hours), so a new contextual hint later is just a new
+ * key, not a migration.
+ */
+export interface EngagementState {
+  /** The post-onboarding "add a job" vs "show me around" choice was made. */
+  entryChoiceMade?: boolean;
+  /** The persistent-nav tour (four tabs + the + button) was shown once. */
+  tourShown?: boolean;
+  /** Contextual hint ids dismissed individually — each shown once, ever. */
+  dismissedHints?: string[];
+  /** The "first day with 2+ jobs" celebration was shown — lifetime, once. */
+  ahaMomentShown?: boolean;
+}
+
 export interface ProfileRecord {
   id: string;
   full_name: string | null;
@@ -26,6 +43,7 @@ export interface ProfileRecord {
   calendar_feed_token: string | null;
   calendar_feed_enabled: boolean;
   created_at: string;
+  engagement_state: EngagementState;
 }
 
 export async function getCurrentProfile(): Promise<ProfileRecord | null> {

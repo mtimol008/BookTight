@@ -9,7 +9,11 @@ export interface Coordinates {
 }
 
 export type NamedTimeSlot = "morning" | "afternoon" | "evening" | "night";
-export type TimeSlotType = NamedTimeSlot | "specific" | "none";
+// "all_day" is deliberately not a NamedTimeSlot: it doesn't occupy a slot
+// WITHIN the day the way morning/afternoon/etc. do, it claims the whole
+// day, so it never participates in NAMED_SLOT_RANGES lookups or slot-range
+// gap math the way a real named slot does.
+export type TimeSlotType = NamedTimeSlot | "specific" | "none" | "all_day";
 
 export interface JobTime {
   type: TimeSlotType;
@@ -226,6 +230,27 @@ export const CLUSTER_DISTANCE_KM = 40;
  *  so the bar is much smaller than the constants above. Tune freely. */
 export const MEANINGFUL_REORDER_DELTA_KM = 1;
 
+/** How many weeks out the day-suggestion engine looks for candidate days —
+ *  not just the currently-viewed week, so a new job can cluster with one
+ *  booked 2-3 weeks out instead of only ever seeing "this week". 4 is a
+ *  starting point: enough room for real clustering, not so much that the
+ *  engine starts reaching for dates a tradesperson wouldn't actually be
+ *  thinking about yet. Tune freely. */
+export const SUGGESTION_LOOKAHEAD_WEEKS = 4;
+
+/** How much one day further out costs in the ranking, in the same km terms
+ *  as addedDistanceKm — a gentle bias, not a rule. Before the lookahead
+ *  widened past one week, "soonest" and "cheapest" were effectively the
+ *  same thing, since every candidate was already close; widening the
+ *  search without this would let a day 3-4 weeks out win on a genuinely
+ *  marginal distance improvement, which reads as "why did it want to book
+ *  this a month out?" even though it's technically ranked correctly. At
+ *  0.5, a week out costs +3.5km-equivalent and the full 4-week horizon
+ *  costs +14km — enough to require a real win (clustering, not a rounding
+ *  difference) to justify going that far, without ruling it out outright.
+ *  Tune freely. */
+export const SOON_PREFERENCE_KM_PER_DAY = 0.5;
+
 /** How heavily ranking favors a day whose OWN jobs are close to the new
  *  one, over raw added driving distance. Cheapest-insertion always finds a
  *  cheap slot at the home-adjacent start/end of ANY day's route when the
@@ -350,9 +375,26 @@ export function parseTimeToMinutes(time: string): number {
   return hours * 60 + minutes;
 }
 
+/** Whole days between two "YYYY-MM-DD" strings (positive when b is later).
+ *  Local midnight on both sides, so this can't be thrown off by a DST
+ *  transition landing between them the way a raw ms-difference would. */
+function daysBetween(a: string, b: string): number {
+  const [aYear, aMonth, aDay] = a.split("-").map(Number);
+  const [bYear, bMonth, bDay] = b.split("-").map(Number);
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const aDate = new Date(aYear, aMonth - 1, aDay).getTime();
+  const bDate = new Date(bYear, bMonth - 1, bDay).getTime();
+  return Math.round((bDate - aDate) / msPerDay);
+}
+
 /** Minutes-since-midnight sort key for a job's time, or null if flexible. */
 function getSortKeyMinutes(time: JobTime): number | null {
-  if (time.type === "none") {
+  if (time.type === "none" || time.type === "all_day") {
+    // No clock position to sort by — an all-day job is always the day's
+    // only stop in the normal case, so ordering never matters for it. It
+    // can only end up sharing a day via an explicit override, which is
+    // already an unusual state; falling back to "flexible" here is a safe,
+    // non-crashing default rather than special-cased ordering logic.
     return null;
   }
   if (time.type === "specific") {
@@ -833,6 +875,10 @@ export interface DayTimeOption {
   /** False only when EVERY gap in the day's schedule fails — not just the
    *  geometrically closest one. */
   fits: boolean;
+  /** Why fits is false, when it's for a reason a plain gap-shortfall
+   *  message would misrepresent. null covers the ordinary "no gap works"
+   *  case (blockedSlots/shortfallMinutes below already explain that one). */
+  blockedReason: "day-off" | "all-day-conflict" | null;
   /** What actually constrains the chosen gap. isHome covers the start/end
    *  of the working day. Meaningful when fits === true. */
   previousNeighbor: RouteNeighbor;
@@ -1129,6 +1175,7 @@ function analyzeDayGaps(
         closestFailureDistanceKm = reach;
         closestFailure = {
           fits: false,
+          blockedReason: null,
           previousNeighbor,
           nextNeighbor,
           earliestStartMinutes,
@@ -1192,6 +1239,7 @@ function analyzeDayGaps(
       best = {
         option: {
           fits: true,
+          blockedReason: null,
           previousNeighbor,
           nextNeighbor,
           earliestStartMinutes,
@@ -1224,6 +1272,7 @@ function analyzeDayGaps(
   return {
     option: closestFailure ?? {
       fits: false,
+      blockedReason: null,
       previousNeighbor: buildNeighbor(null, newJob, home),
       nextNeighbor: buildNeighbor(null, newJob, home),
       earliestStartMinutes: preferences.workdayStartMinutes,
@@ -1283,6 +1332,15 @@ export function suggestBestDay(
     };
 
     const stops = jobsByDate.get(date) ?? [];
+    // A day holds either any number of regular jobs, or exactly one
+    // all-day job — never both. Checked before any gap math, the same way
+    // a disabled day is: this isn't "does it physically fit", it's
+    // "is this combination even allowed". Symmetric: blocked if the day
+    // already has an all-day job booked, OR if the new job itself is
+    // all-day and the day already has anything on it.
+    const allDayConflict =
+      stops.some((job) => job.time.type === "all_day") ||
+      (newJobTime.type === "all_day" && stops.length > 0);
     const routeStops: RouteStop[] = stops.map((job) => ({
       id: job.id,
       latitude: job.latitude,
@@ -1344,23 +1402,26 @@ export function suggestBestDay(
 
     let previousNeighbor = buildNeighbor(beforeStop, newJob, home);
     let nextNeighbor = buildNeighbor(afterStop, newJob, home);
-    // A day that's off is unbookable no matter what time was requested —
-    // unlike a full-day gap failure, this also has to cover "specific"
-    // requests, which never get a timeOption from gapAnalysis at all
-    // (analyzeDayGaps only runs for flexible/named-slot requests above).
-    let dayTimeOption: DayTimeOption | null = !dayHours.enabled
-      ? {
-          fits: false,
-          previousNeighbor: buildNeighbor(null, newJob, home),
-          nextNeighbor: buildNeighbor(null, newJob, home),
-          earliestStartMinutes: dayWindow.workdayStartMinutes,
-          latestStartMinutes: dayWindow.workdayEndMinutes,
-          shortfallMinutes: null,
-          startMinutes: null,
-          slot: null,
-          blockedSlots: [],
-        }
-      : (gapAnalysis?.option ?? null);
+    // A day that's off, or blocked by the one-all-day-job rule, is
+    // unbookable no matter what time was requested — unlike a full-day gap
+    // failure, this also has to cover "specific" and "all_day" requests,
+    // which never get a timeOption from gapAnalysis at all (analyzeDayGaps
+    // only runs for flexible/named-slot requests above).
+    let dayTimeOption: DayTimeOption | null =
+      !dayHours.enabled || allDayConflict
+        ? {
+            fits: false,
+            blockedReason: allDayConflict ? "all-day-conflict" : "day-off",
+            previousNeighbor: buildNeighbor(null, newJob, home),
+            nextNeighbor: buildNeighbor(null, newJob, home),
+            earliestStartMinutes: dayWindow.workdayStartMinutes,
+            latestStartMinutes: dayWindow.workdayEndMinutes,
+            shortfallMinutes: null,
+            startMinutes: null,
+            slot: null,
+            blockedSlots: [],
+          }
+        : (gapAnalysis?.option ?? null);
 
     // A flexible job whose suggestion resolved to a NAMED slot (a wide
     // window, not an exact time) doesn't actually get inserted at "the gap
@@ -1405,8 +1466,14 @@ export function suggestBestDay(
       dayTimeOption = { ...usable.option, previousNeighbor, nextNeighbor };
     }
 
+    // Skipped when allDayConflict — the day is already fully explained by
+    // dayTimeOption's "all-day-conflict" reason, and computing this too
+    // would report a plain minutes-apart gap conflict against whatever
+    // duration the all-day job resolves to, which is a misleading way to
+    // describe "this day belongs to one all-day job" alongside the honest
+    // message.
     const timeFeasibility =
-      newJobTime.type === "specific"
+      newJobTime.type === "specific" && !allDayConflict
         ? computeTimeFeasibility(
             newJobSortKey as number,
             previousNeighbor,
@@ -1457,9 +1524,20 @@ export function suggestBestDay(
   // best case: a genuinely nearby job (much closer than that) should still
   // rank better than an empty day, not worse, since pairing with real
   // nearby work is the whole point.
+  //
+  // Also biased toward sooner dates (SOON_PREFERENCE_KM_PER_DAY per day out
+  // from the earliest candidate) — only relevant now that candidateDates
+  // can span SUGGESTION_LOOKAHEAD_WEEKS instead of just the current week,
+  // so a day 3-4 weeks out needs a genuine reason (real clustering, not a
+  // rounding difference) to outrank one next week.
+  const earliestCandidateDate = candidateDates[0];
   function rankingScore(day: DayRoute): number {
     const relevancePenaltyKm = day.nearestExistingJobDistanceKm ?? CLUSTER_DISTANCE_KM;
-    return day.addedDistanceKm + PROXIMITY_TO_EXISTING_JOBS_WEIGHT * relevancePenaltyKm;
+    const soonPenaltyKm =
+      SOON_PREFERENCE_KM_PER_DAY * daysBetween(earliestCandidateDate, day.date);
+    return (
+      day.addedDistanceKm + PROXIMITY_TO_EXISTING_JOBS_WEIGHT * relevancePenaltyKm + soonPenaltyKm
+    );
   }
 
   // A day is "not to be suggested" for either of two independent reasons:

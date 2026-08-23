@@ -132,10 +132,13 @@ export function generateICalFeed(
  * derived from that day's actual route — instead of every job sharing its
  * slot's flat placeholder hour (the old behavior, and the reason two
  * "Morning" jobs used to export at the identical time). Flexible ("none")
- * jobs still come through here — their real position and duration still
- * have to occupy time in the chain so jobs after them land correctly — but
- * jobToICalEvent below deliberately ignores their entry and keeps them as
- * an all-day event, since no real time was ever chosen for them.
+ * and all-day jobs still come through here — their real position and
+ * duration still have to occupy time in the chain so jobs after them land
+ * correctly (relevant for an all-day job only in the unusual case where an
+ * override let it share a day with something else) — but jobToICalEvent
+ * below deliberately ignores their own entry and keeps them as an all-day
+ * event: a flexible job never had a real time chosen for it, and an
+ * all-day job's whole point is that it isn't a clock-time event.
  */
 export function deriveClockTimes(
   home: Coordinates,
@@ -183,7 +186,7 @@ export function jobToICalEvent(
   let dtEnd: Date;
   let isAllDay = false;
 
-  if (job.time_slot_type === "none" || !clockTime) {
+  if (job.time_slot_type === "none" || job.time_slot_type === "all_day" || !clockTime) {
     isAllDay = true;
     dtStart = new Date(jobDate);
     dtEnd = new Date(jobDate);

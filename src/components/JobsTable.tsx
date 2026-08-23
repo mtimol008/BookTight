@@ -11,9 +11,13 @@ import {
   getSchedulingSuggestion,
   saveManualOrder,
   updateExistingJob,
+  type AhaMomentPayload,
   type SuggestionResult,
 } from "@/app/actions";
+import { AhaMomentModal } from "@/components/AhaMomentModal";
 import { DaySuggestionPanel, type TimeSelection } from "@/components/DaySuggestionPanel";
+import { DurationFields } from "@/components/DurationFields";
+import { Hint } from "@/components/Hint";
 import { DragHandleIcon, PinIcon } from "@/components/icons";
 import { formatDayHeading, formatDistance, type DistanceUnit } from "@/lib/format";
 import type { AddressSuggestion } from "@/lib/geocoding";
@@ -35,6 +39,7 @@ const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
   { value: "evening", label: "Evening" },
   { value: "night", label: "Night" },
   { value: "specific", label: "Specific" },
+  { value: "all_day", label: "All day" },
 ];
 
 function timeSlotLabel(type: TimeSlotType): string {
@@ -49,12 +54,23 @@ function jobTimeLabel(job: JobRecord): string {
     : timeSlotLabel(job.time_slot_type as TimeSlotType);
 }
 
-/** The section a stop displays under — every type except "specific", which
- *  has its own real time rather than sharing a time-of-day zone with
- *  siblings. */
+/** Blank input means "use the flat default" — forced null for an all-day
+ *  job regardless of whatever's left in the (hidden, not cleared) duration
+ *  input from before it was selected, since a duration number is
+ *  meaningless once the job claims the whole day. */
+function resolvedDurationMinutes(timeSlotType: TimeSlotType, input: string): number | null {
+  if (timeSlotType === "all_day") return null;
+  return input.trim() ? Number(input) : null;
+}
+
+/** The section a stop displays under — every type except "specific" and
+ *  "all_day", which don't share a time-of-day zone with siblings: a
+ *  specific job has its own real time, and an all-day job (ordinarily the
+ *  day's only stop anyway) doesn't belong to a morning/afternoon/etc. zone
+ *  at all. */
 function sectionOf(job: JobRecord): TimeSlotType | null {
   const type = job.time_slot_type as TimeSlotType;
-  return type === "specific" ? null : type;
+  return type === "specific" || type === "all_day" ? null : type;
 }
 
 /** One day's jobs in the order they should actually be driven. Distances
@@ -202,6 +218,7 @@ export function JobsTable({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<EditValues | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ahaMoment, setAhaMoment] = useState<AhaMomentPayload | null>(null);
   // First day open, the rest collapsed — the design's mixed state.
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () => new Set(days.slice(1).map((day) => day.date))
@@ -306,7 +323,7 @@ export function JobsTable({
 
     startSaving(async () => {
       try {
-        await updateExistingJob({
+        const aha = await updateExistingJob({
           id: job.id,
           address: editValues.address,
           date,
@@ -314,14 +331,15 @@ export function JobsTable({
           specificTime: time.specificTime,
           customerName: editValues.customerName,
           description: editValues.description,
-          durationMinutes: editValues.durationMinutesInput.trim()
-            ? Number(editValues.durationMinutesInput)
-            : null,
+          durationMinutes: resolvedDurationMinutes(time.type, editValues.durationMinutesInput),
         });
         setEditingId(null);
         setEditValues(null);
         setDaySuggestion(null);
         setCurrentDateOnDemandInfo(null);
+        if (aha) {
+          setAhaMoment(aha);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save changes.");
       }
@@ -349,9 +367,10 @@ export function JobsTable({
       return;
     }
 
-    const durationMinutes = editValues.durationMinutesInput.trim()
-      ? Number(editValues.durationMinutesInput)
-      : null;
+    const durationMinutes = resolvedDurationMinutes(
+      editValues.timeSlotType,
+      editValues.durationMinutesInput
+    );
 
     // Address, time, or duration changed — check whether the current day is
     // still the best choice before saving, rather than silently keeping a
@@ -560,6 +579,7 @@ export function JobsTable({
   }
 
   return (
+    <>
     <div>
       {error && <p className="error-text">{error}</p>}
       {reorderError && <p className="error-text">{reorderError}</p>}
@@ -567,6 +587,11 @@ export function JobsTable({
 
       {reorderWarning && (
         <div className="warn-block">
+          <Hint id="warning-block">
+            A warning like this doesn&apos;t block anything — it&apos;s just
+            a heads-up before you commit. &ldquo;Keep this order&rdquo;
+            always still works.
+          </Hint>
           <p>
             This order adds ~{formatDistanceForUnit(reorderWarning.impact.deltaKm, distanceUnit)} more than the most
             efficient arrangement ({formatDistanceForUnit(reorderWarning.impact.algorithmicKm, distanceUnit)} vs{" "}
@@ -598,6 +623,18 @@ export function JobsTable({
         const allCompleted =
           day.stops.length > 0 &&
           day.stops.every((stop) => stop.job.status === "completed");
+
+        // Drag-to-reorder only means anything once a section actually has
+        // something to reorder against — the hint attaches to the first
+        // stop of whichever section first has 2+, not to every draggable
+        // stop individually.
+        const sectionCounts = new Map<TimeSlotType, number>();
+        for (const stop of day.stops) {
+          const section = sectionOf(stop.job);
+          if (section !== null) {
+            sectionCounts.set(section, (sectionCounts.get(section) ?? 0) + 1);
+          }
+        }
 
         return (
           <div className="card" key={day.date}>
@@ -663,6 +700,13 @@ export function JobsTable({
                         date={day.date}
                       />
                     ) : null;
+                    const dragHint =
+                      showHeader && section !== null && (sectionCounts.get(section) ?? 0) >= 2 ? (
+                        <Hint key={`drag-hint-${job.id}`} id="drag-reorder">
+                          Jobs in the same time-of-day group can be dragged
+                          (using the handle on the right) to reorder them.
+                        </Hint>
+                      ) : null;
 
                   if (editingId === job.id && editValues && daySuggestion) {
                     return [
@@ -678,11 +722,10 @@ export function JobsTable({
                               type: editValues.timeSlotType,
                               specificTime: editValues.specificTime,
                             }}
-                            durationMinutes={
-                              editValues.durationMinutesInput.trim()
-                                ? Number(editValues.durationMinutesInput)
-                                : null
-                            }
+                            durationMinutes={resolvedDurationMinutes(
+                              editValues.timeSlotType,
+                              editValues.durationMinutesInput
+                            )}
                             currentDate={job.date}
                             currentDateInfo={currentDateOnDemandInfo}
                             requestedTimeLabel={
@@ -781,23 +824,23 @@ export function JobsTable({
                             />
                           </div>
 
-                          <div className="field">
-                            <label className="field-label">Duration (minutes)</label>
-                            <input
-                              className="input"
-                              type="number"
-                              min={1}
-                              step="1"
-                              placeholder={`Defaults to ${ASSUMED_JOB_DURATION_MINUTES} min`}
-                              value={editValues.durationMinutesInput}
-                              onChange={(e) =>
-                                setEditValues({
-                                  ...editValues,
-                                  durationMinutesInput: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
+                          {editValues.timeSlotType !== "all_day" && (
+                            <div className="field">
+                              <label className="field-label">Duration</label>
+                              <DurationFields
+                                value={editValues.durationMinutesInput}
+                                onChange={(value) =>
+                                  setEditValues({
+                                    ...editValues,
+                                    durationMinutesInput: value,
+                                  })
+                                }
+                              />
+                              <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
+                                Defaults to {ASSUMED_JOB_DURATION_MINUTES} min.
+                              </p>
+                            </div>
+                          )}
 
                           <div className="field">
                             <label className="field-label">Date</label>
@@ -891,6 +934,7 @@ export function JobsTable({
 
                   return [
                     header,
+                    dragHint,
                     <TimelineStop
                       key={job.id}
                       job={job}
@@ -918,5 +962,13 @@ export function JobsTable({
         );
       })}
     </div>
+    {ahaMoment && (
+      <AhaMomentModal
+        payload={ahaMoment}
+        distanceUnit={distanceUnit}
+        onDismiss={() => setAhaMoment(null)}
+      />
+    )}
+    </>
   );
 }

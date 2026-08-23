@@ -72,15 +72,16 @@ export function OnboardingForm({ profile }: { profile: ProfileRecord }) {
             if (Number.isFinite(numericValue)) {
               const currentKm =
                 distanceUnit === "mi" ? numericValue / 0.621371 : numericValue;
-              setMaxTravelRange(
-                Math.round(distanceKmToUnit(currentKm, nextUnit)).toFixed(1)
-              );
+              setMaxTravelRange(distanceKmToUnit(currentKm, nextUnit).toFixed(1));
             }
           }}
         >
           <option value="km">Kilometers (km)</option>
           <option value="mi">Miles (mi)</option>
         </select>
+        <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
+          Choose the unit you&apos;d like distances to be displayed in.
+        </p>
       </div>
 
       <div className="field">

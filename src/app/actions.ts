@@ -11,15 +11,18 @@ import {
   updateJob,
   type JobRecord,
 } from "@/lib/jobs";
-import { getCurrentProfile, type ProfileRecord } from "@/lib/profiles";
+import { getCurrentProfile, type EngagementState, type ProfileRecord } from "@/lib/profiles";
+import { updateEngagementState } from "@/lib/engagement";
 import {
   compareManualOrder,
   dayHoursFromWorkingHours,
   isNamedSlot,
+  planDayRoute,
   suggestBestDay,
   formatMinutesAsClock,
   minutesToTimeValue,
   weekdayKeyOf,
+  SUGGESTION_LOOKAHEAD_WEEKS,
   WEEKDAY_KEYS,
   WEEKDAY_LABELS,
   type DayHours,
@@ -34,7 +37,12 @@ import {
   type Weekday,
 } from "@/lib/scheduling";
 import { formatDistance, type DistanceUnit } from "@/lib/format";
-import { getCurrentWeekDates, getCurrentWeekRange, getTodayDateString } from "@/lib/week";
+import {
+  getCurrentWeekRange,
+  getTodayDateString,
+  getWeekDates,
+  getWeekRange,
+} from "@/lib/week";
 import { revalidatePath } from "next/cache";
 
 export interface RequestedTime {
@@ -174,6 +182,16 @@ function buildTimeSuggestion(
   const hasNext = !nextNeighbor.isHome;
 
   if (!option.fits) {
+    if (option.blockedReason === "all-day-conflict") {
+      return {
+        fits: false,
+        slot: null,
+        specificTime: null,
+        label: null,
+        reasoning:
+          "An all-day job takes the whole day, so it can't share with anything else booked that day — and vice versa. Try another day.",
+      };
+    }
     // Every gap in the day failed, so name the parts of the day that are
     // booked up rather than citing one arbitrary pair of jobs.
     if (option.blockedSlots.length > 0) {
@@ -269,6 +287,16 @@ function buildTimeVerdict(
     };
   }
 
+  // Same reasoning as the day-off check above, for the same reason: an
+  // all-day conflict blocks every request type, including "specific" and
+  // "all_day" itself, neither of which reach buildTimeSuggestion below
+  // ("specific" normally relies on timeFeasibility instead, but that's
+  // deliberately left null for this exact case in scheduling.ts, since a
+  // plain minutes-apart gap message would misrepresent a whole-day block).
+  if (day.timeOption?.blockedReason === "all-day-conflict") {
+    return buildTimeSuggestion(day, weekJobs, distanceUnit);
+  }
+
   if (requestedTime.type === "none") {
     return buildTimeSuggestion(day, weekJobs, distanceUnit);
   }
@@ -311,13 +339,20 @@ export async function getSchedulingSuggestion(
     );
   }
 
-  const { startDate, endDate } = getCurrentWeekRange();
-  const weekJobs = await getJobsForWeek(startDate, endDate);
-  // Exclude days that have already passed — the week's date range always
-  // includes them (Monday through Sunday), but a day before today isn't
-  // actually bookable anymore.
+  // Looks SUGGESTION_LOOKAHEAD_WEEKS out, not just the currently-viewed
+  // week — otherwise a job 2-3 weeks out that this one should genuinely
+  // cluster with is invisible to ranking entirely, only reachable by
+  // manually typing that exact date into "Different date".
+  const { startDate: currentMonday } = getCurrentWeekRange();
+  const { endDate } = getWeekRange(currentMonday, SUGGESTION_LOOKAHEAD_WEEKS);
+  const weekJobs = await getJobsForWeek(currentMonday, endDate);
+  // Exclude days that have already passed — the range always starts on
+  // this week's Monday, but a day before today isn't actually bookable
+  // anymore.
   const today = getTodayDateString();
-  const candidateDates = getCurrentWeekDates().filter((date) => date >= today);
+  const candidateDates = getWeekDates(currentMonday, SUGGESTION_LOOKAHEAD_WEEKS).filter(
+    (date) => date >= today
+  );
 
   const existingJobs: ExistingJob[] = weekJobs
     .filter((job) => job.id !== excludeJobId)
@@ -506,6 +541,58 @@ export async function getAddressSuggestions(
   });
 }
 
+/** The real route that now exists on a day, for the "aha moment"
+ *  celebration — no distance-saved claim, since a day's first-ever pairing
+ *  has no prior baseline to compare against. Honest is the whole point. */
+export interface AhaMomentPayload {
+  date: string;
+  stops: { customerName: string; address: string }[];
+  /** null when no home address is set — the round trip has no anchor. */
+  totalDistanceKm: number | null;
+}
+
+/**
+ * Checked after every save: the first time (lifetime, once) a day reaches
+ * 2+ non-cancelled jobs, this flips the flag and returns the real route to
+ * celebrate. Cheap early exit once the flag is already set, so this costs
+ * nothing on every subsequent save for the rest of the account's life.
+ */
+async function checkAhaMoment(date: string): Promise<AhaMomentPayload | null> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.engagement_state?.ahaMomentShown) {
+    return null;
+  }
+
+  const dayJobs = await getJobsForWeek(date, date);
+  if (dayJobs.length < 2) {
+    return null;
+  }
+
+  await updateEngagementState({ ahaMomentShown: true });
+
+  const home = { latitude: profile.home_latitude, longitude: profile.home_longitude };
+  const existingJobs: ExistingJob[] = dayJobs.map((job) => ({
+    id: job.id,
+    date: job.date,
+    latitude: job.latitude,
+    longitude: job.longitude,
+    time: jobRecordToJobTime(job),
+    durationMinutes: job.duration_minutes,
+    manualPosition: job.manual_position,
+  }));
+  const route = planDayRoute(home, existingJobs);
+  const jobsById = new Map(dayJobs.map((job) => [job.id, job]));
+
+  return {
+    date,
+    stops: route.stops.map((stop) => {
+      const job = jobsById.get(stop.jobId) as JobRecord;
+      return { customerName: job.customer_name, address: job.address };
+    }),
+    totalDistanceKm: route.totalDistanceKm,
+  };
+}
+
 export interface ConfirmJobInput {
   address: string;
   latitude: number;
@@ -518,7 +605,9 @@ export interface ConfirmJobInput {
   durationMinutes: number | null;
 }
 
-export async function confirmAndSaveJob(input: ConfirmJobInput): Promise<void> {
+export async function confirmAndSaveJob(
+  input: ConfirmJobInput
+): Promise<AhaMomentPayload | null> {
   if (input.date < getTodayDateString()) {
     throw new Error("Can't book a job on a date that's already passed.");
   }
@@ -536,6 +625,7 @@ export async function confirmAndSaveJob(input: ConfirmJobInput): Promise<void> {
   });
 
   revalidatePath("/");
+  return checkAhaMoment(input.date);
 }
 
 export interface UpdateJobFormInput {
@@ -551,7 +641,7 @@ export interface UpdateJobFormInput {
 
 export async function updateExistingJob(
   input: UpdateJobFormInput
-): Promise<void> {
+): Promise<AhaMomentPayload | null> {
   // Re-geocode on every edit (not just when the address looks different) so
   // stored coordinates never drift out of sync with the address text.
   const geocoded = await geocodeAddress(input.address);
@@ -594,6 +684,7 @@ export async function updateExistingJob(
   });
 
   revalidatePath("/");
+  return checkAhaMoment(input.date);
 }
 
 /**
@@ -655,4 +746,31 @@ export async function markJobCancelled(id: string): Promise<void> {
   await setJobStatuses([id], "cancelled");
   revalidatePath("/");
   revalidatePath("/review", "layout");
+}
+
+// ------------------------------------------------------- first-time engagement
+
+/** Current user's engagement flags — what's already been shown/dismissed,
+ *  fetched once by AppShell and shared via context rather than refetched
+ *  per hint. */
+export async function getEngagementState(): Promise<EngagementState> {
+  const profile = await getCurrentProfile();
+  return profile?.engagement_state ?? {};
+}
+
+/** The post-onboarding "add a job now" vs "show me around" choice was
+ *  made — gates the /welcome redirect in Home(), so it's never shown
+ *  again once resolved either way. */
+export async function markEntryChoiceMade(): Promise<void> {
+  await updateEngagementState({ entryChoiceMade: true });
+}
+
+/** The persistent-nav tour (four tabs + the + button) was shown once. */
+export async function markTourShown(): Promise<void> {
+  await updateEngagementState({ tourShown: true });
+}
+
+/** One contextual hint dismissed — shown once, ever, per hint id. */
+export async function dismissHint(hintId: string): Promise<void> {
+  await updateEngagementState({ dismissedHints: [hintId] });
 }

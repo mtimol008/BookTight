@@ -112,3 +112,13 @@ export function getWeekRange(startMonday: string, weeks: number): WeekRange {
     endDate: toISODate(end),
   };
 }
+
+/** Every date from startMonday through N weeks later, inclusive. */
+export function getWeekDates(startMonday: string, weeks: number): string[] {
+  const start = new Date(startMonday + "T00:00:00");
+  return Array.from({ length: weeks * 7 }, (_, i) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    return toISODate(day);
+  });
+}

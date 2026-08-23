@@ -54,6 +54,27 @@ export async function getJobsForWeek(
 }
 
 /**
+ * All-time job count, any status, unscoped by date — deliberately NOT
+ * "jobs this week", which is normal and often zero even for an account in
+ * active use. Used to tell a genuinely new account (never once used Add a
+ * Job) from an established one, for the stall nudge and the early-session
+ * "Add another job" flow.
+ */
+export async function getTotalJobCount(): Promise<number> {
+  const supabase = await createClient();
+
+  const { count, error } = await supabase
+    .from("jobs")
+    .select("id", { count: "exact", head: true });
+
+  if (error) {
+    throw new Error(`Failed to count jobs: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+/**
  * Same as getJobsForWeek, but for the public calendar feed endpoint, which
  * has no logged-in user to scope via RLS. Uses the admin client and filters
  * by user_id explicitly instead, so a feed can only ever see its own

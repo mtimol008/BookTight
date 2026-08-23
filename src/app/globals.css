@@ -96,7 +96,32 @@ button:disabled {
   max-width: var(--column);
   margin: 0 auto;
   min-height: 100vh;
-  background: var(--bg);
+  /* Two decorative layers over the plain base colour, defined once here
+   * since every screen (signed-in via AppShell, or an auth screen using
+   * .shell directly) shares this one rule.
+   * - bg-grid.svg is a genuine 28x28 repeat tile, so it can cover any
+   *   content height — a 3-card week or a long scrolled Account page —
+   *   without ever looking like it's "tiling awkwardly": that's what a
+   *   repeat pattern is for. Scrolls with the page, same as the content.
+   * - bg-frame.svg (corner crosshairs, compass, ruler, hatch swatch) is
+   *   one-off decoration at fixed positions in a 430x932 reference canvas,
+   *   not a tile — shown once per screen, sized with `contain` so it can
+   *   only ever scale preserving its aspect ratio, never stretch or crop
+   *   through an element. Given `background-attachment: fixed`, sizing is
+   *   computed against the viewport rather than .shell's own box — that
+   *   matters because .shell's height tracks its content (how many jobs
+   *   are booked that week), which would otherwise make `contain` shrink
+   *   the whole graphic on a light day and grow it on a busy one. The
+   *   viewport is the stable, predictable reference; --column is 430px,
+   *   matching the artwork's native width, so on a phone-shaped viewport
+   *   this renders at close to 1:1 scale.
+   */
+  background-color: var(--bg);
+  background-image: url("/bg-frame.svg"), url("/bg-grid.svg");
+  background-repeat: no-repeat, repeat;
+  background-position: top center, top left;
+  background-attachment: fixed, scroll;
+  background-size: contain, 28px 28px;
   padding: 20px 18px calc(var(--nav-height) + 28px);
   position: relative;
 }
@@ -583,6 +608,60 @@ body[data-field-focused="true"] .fab {
   z-index: 21;
 }
 
+/* A plain full-screen dim + bottom card, not a spotlight/cutout effect —
+   above both .nav (20) and .fab (21). Shared by the nav tour and the
+   aha-moment celebration, so both get the same visual language rather
+   than two different modal treatments. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 31, 36, 0.55);
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 20px;
+  animation: modal-backdrop-in 0.18s ease-out;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: var(--column);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: calc(var(--nav-height) + 20px);
+  box-shadow: 0 -4px 24px rgba(27, 31, 36, 0.25);
+  max-height: calc(100vh - var(--nav-height) - 40px);
+  overflow-y: auto;
+  animation: modal-card-in 0.18s ease-out;
+}
+
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop,
+  .modal-card {
+    animation: none;
+  }
+}
+
+.modal-card p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 /* ---------------------------------------------------------------- forms */
 
 .field {
@@ -640,7 +719,16 @@ body[data-field-focused="true"] .fab {
 
 .input--time {
   width: auto;
-  font-family: var(--font-mono), monospace;
+  /* No font-family override here — a native <input type="time"> lays out
+   * its internal segments (hour/minute/AM-PM) using its own metrics, which
+   * don't account for a custom font substituted in afterward. Forcing the
+   * app's monospace font onto it clipped the leading digit and AM/PM text.
+   * Falls back to .input's own font, which the control sizes correctly
+   * for. min-width is a backstop so a tight flex row (two of these side by
+   * side in .working-hours-row) can't squeeze it narrower than a full
+   * "12:00 AM" needs — .working-hours-row already wraps, so there's
+   * somewhere for the row to go instead of clipping. */
+  min-width: 128px;
 }
 
 .working-hours-grid {
@@ -1082,6 +1170,31 @@ body[data-field-focused="true"] .fab {
 
 .warn-block p + p {
   margin-top: 6px;
+}
+
+/* A small, dismissible tip attached to a specific feature — first-time
+   contextual guidance, not a warning or a suggestion, so it gets its own
+   quieter treatment rather than reusing --warning or --route tints. */
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--tint-accent);
+  border: 1px solid rgba(232, 169, 58, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.hint-dismiss {
+  background: none;
+  border: none;
+  color: var(--muted);
+  flex-shrink: 0;
+  padding: 2px;
 }
 
 /* --------------------------------------------------------------- review */

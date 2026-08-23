@@ -31,7 +31,7 @@ export async function completeOnboarding(
     .update({
       working_hours: validated.value.workingHours,
       distance_unit: validated.value.distanceUnit,
-      max_travel_range_km: Math.round(validated.value.maxTravelRangeKm),
+      max_travel_range_km: validated.value.maxTravelRangeKm,
       max_jobs_per_day: validated.value.maxJobsPerDay,
       onboarding_completed_at: new Date().toISOString(),
     })

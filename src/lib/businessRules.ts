@@ -93,9 +93,14 @@ export function validateBusinessRules(
     return { error: "Max travel range must be a positive number." };
   }
 
-  const maxTravelRangeKm = Math.round(
-    distanceUnit === "mi" ? maxTravelRange / MILES_PER_KILOMETER : maxTravelRange
-  );
+  const rawMaxTravelRangeKm =
+    distanceUnit === "mi" ? maxTravelRange / MILES_PER_KILOMETER : maxTravelRange;
+  // Rounded to one decimal place of km, not a whole km — a whole-km grid
+  // (~0.62 mi per step) can't represent a value entered to 0.1 mi
+  // precision, which is what silently turned "25.0 mi" into "24.9 mi" on
+  // redisplay. One decimal km is fine enough that a value entered to 0.1
+  // mi/km round-trips back to the same displayed number.
+  const maxTravelRangeKm = Math.round(rawMaxTravelRangeKm * 10) / 10;
 
   if (maxTravelRangeKm <= 0) {
     return { error: "Max travel range must be a positive number." };

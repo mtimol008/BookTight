@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useActionState } from "react";
 import { signUp, type SignUpState } from "@/app/signup/actions";
 import { getAddressSuggestions } from "@/app/actions";
-import { PinIcon } from "@/components/icons";
+import { EyeIcon, EyeOffIcon, PinIcon } from "@/components/icons";
 import type { AddressSuggestion } from "@/lib/geocoding";
 
 const initialState: SignUpState = {};
@@ -117,10 +117,11 @@ export function SignUpForm() {
           <button
             type="button"
             className="input-toggle"
+            style={{ display: "flex", alignItems: "center" }}
             aria-label={showPassword ? "Hide password" : "Show password"}
             onClick={() => setShowPassword((current) => !current)}
           >
-            {showPassword ? "Hide" : "Show"}
+            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
           </button>
         </div>
       </div>
@@ -145,10 +146,11 @@ export function SignUpForm() {
           <button
             type="button"
             className="input-toggle"
+            style={{ display: "flex", alignItems: "center" }}
             aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
             onClick={() => setShowConfirmPassword((current) => !current)}
           >
-            {showConfirmPassword ? "Hide" : "Show"}
+            {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
           </button>
         </div>
       </div>

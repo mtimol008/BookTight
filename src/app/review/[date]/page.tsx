@@ -5,6 +5,7 @@ import { DayReview } from "@/components/DayReview";
 import { BackIcon } from "@/components/icons";
 import { formatDayTitle } from "@/lib/format";
 import { getScheduledJobsForDate } from "@/lib/jobs";
+import { getCurrentProfile } from "@/lib/profiles";
 
 export default async function ReviewPage({
   params,
@@ -12,7 +13,10 @@ export default async function ReviewPage({
   params: Promise<{ date: string }>;
 }) {
   const { date } = await params;
-  const jobs = await getScheduledJobsForDate(date);
+  const [jobs, profile] = await Promise.all([
+    getScheduledJobsForDate(date),
+    getCurrentProfile(),
+  ]);
 
   // Nothing left awaiting a decision — either the day is already reviewed
   // or the URL was made up. Either way there's nothing to show.
@@ -29,7 +33,7 @@ export default async function ReviewPage({
         <h1 className="screen-title">Review {formatDayTitle(date)}</h1>
       </div>
 
-      <DayReview date={date} jobs={jobs} />
+      <DayReview date={date} jobs={jobs} distanceUnit={profile?.distance_unit ?? "km"} />
     </AppShell>
   );
 }

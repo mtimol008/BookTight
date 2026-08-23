@@ -8,10 +8,13 @@ import {
   getDayRouteInfo,
   getDayTimeSuggestion,
   getSchedulingSuggestion,
+  type AhaMomentPayload,
   type SuggestionResult,
   type TimeSuggestion,
 } from "@/app/actions";
+import { AhaMomentModal } from "@/components/AhaMomentModal";
 import { PinIcon } from "@/components/icons";
+import { DurationFields } from "@/components/DurationFields";
 import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import type { AddressSuggestion } from "@/lib/geocoding";
 import { ASSUMED_JOB_DURATION_MINUTES, type DayRoute, type TimeSlotType } from "@/lib/scheduling";
@@ -23,6 +26,7 @@ const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
   { value: "evening", label: "Evening" },
   { value: "night", label: "Night" },
   { value: "specific", label: "Specific" },
+  { value: "all_day", label: "All day" },
   { value: "none", label: "Flexible" },
 ];
 
@@ -46,8 +50,33 @@ function distanceComparisonLabel(day: DayRoute): string | null {
   return `roughly ${multiplier}x further than your other job(s) that day`;
 }
 
-export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
+export function NewJobForm({
+  distanceUnit,
+  isEarlySession = false,
+}: {
+  distanceUnit: DistanceUnit;
+  /** While true, a successful save offers "Add another job" (resets this
+   *  same form) instead of returning to This Week — early sessions only;
+   *  see EARLY_SESSION_JOB_COUNT in add/page.tsx. */
+  isEarlySession?: boolean;
+}) {
   const router = useRouter();
+  const [savedConfirmation, setSavedConfirmation] = useState<{
+    customerName: string;
+    date: string;
+  } | null>(null);
+  const [ahaMoment, setAhaMoment] = useState<AhaMomentPayload | null>(null);
+
+  // Whatever doSave already decided should happen next (the confirmation
+  // card was already set, or an established user needs to leave for This
+  // Week) — the modal just needed to show first.
+  function dismissAhaMoment() {
+    setAhaMoment(null);
+    if (!isEarlySession && !savedConfirmation) {
+      router.push("/");
+      router.refresh();
+    }
+  }
 
   const [address, setAddress] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -91,9 +120,16 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
   const [isCheckingTimeSuggestion, startCheckingTimeSuggestion] = useTransition();
 
   // Blank means "use the flat default" everywhere this is threaded through.
-  const durationMinutes = durationMinutesInput.trim()
-    ? Number(durationMinutesInput)
-    : null;
+  // Forced null for an all-day job regardless of whatever's still sitting
+  // in the (now hidden, not cleared) duration input from before it was
+  // selected — a duration number is meaningless once the job claims the
+  // whole day.
+  const durationMinutes =
+    timeSlotType === "all_day"
+      ? null
+      : durationMinutesInput.trim()
+        ? Number(durationMinutesInput)
+        : null;
 
   function handleDurationChange(value: string) {
     setDurationMinutesInput(value);
@@ -123,22 +159,44 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
     setCandidateIndex(0);
   }
 
+  /** "Add another job" — the same form, reset to a blank slate, rather
+   *  than a parallel bulk-add UI. */
+  function resetForm() {
+    setAddress("");
+    setCustomerName("");
+    setDescription("");
+    setDurationMinutesInput("");
+    setTimeSlotType("none");
+    setSpecificTime("");
+    setAddressSuggestions([]);
+    setShowAddressSuggestions(false);
+    setSelectedDateRaw("");
+    setAcceptTimeSuggestion(false);
+    setError(null);
+    setSavedConfirmation(null);
+    invalidateSuggestion();
+  }
+
+  function goToWeek() {
+    router.push("/");
+    router.refresh();
+  }
+
   // Recomputes the time suggestion for whatever day was just selected.
-  // Reuses the original suggestion's answer when it's for the same day;
-  // otherwise fetches fresh, since a different day can have entirely
-  // different neighboring jobs.
+  // Reuses the original suggestion's answer when it's for the same day
+  // (including null — genuinely nothing to report); otherwise always
+  // fetches fresh rather than assuming a null original answer means every
+  // other day will be null too. That assumption doesn't hold for
+  // "all_day" requests, where whether there's anything to report depends
+  // on whether THIS specific day already has something booked, not on
+  // the request type alone.
   function refreshTimeSuggestionFor(date: string) {
     if (!suggestion) return;
     timeSuggestionRequestRef.current = date;
 
-    if (!suggestion.timeSuggestion) {
-      setSelectedDayTimeSuggestion(null);
-      return;
-    }
-
     if (date === suggestion.suggestion.day.date) {
       setSelectedDayTimeSuggestion(suggestion.timeSuggestion);
-      setAcceptTimeSuggestion(suggestion.timeSuggestion.fits);
+      setAcceptTimeSuggestion(suggestion.timeSuggestion?.fits ?? false);
       return;
     }
 
@@ -320,7 +378,7 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
 
     startSaving(async () => {
       try {
-        await confirmAndSaveJob({
+        const aha = await confirmAndSaveJob({
           address: suggestion.formattedAddress,
           latitude: suggestion.coordinates.latitude,
           longitude: suggestion.coordinates.longitude,
@@ -331,10 +389,25 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
           description,
           durationMinutes,
         });
-        // Add is its own screen now, so a saved job returns to the week
-        // rather than clearing the form in place.
-        router.push("/");
-        router.refresh();
+
+        // Whatever happens next (the confirmation card, or leaving for
+        // This Week) is decided now but deferred to the modal's dismiss
+        // handler when there's a celebration to show first — it takes
+        // priority over both, sitting on top as an overlay either way.
+        if (isEarlySession) {
+          // Offer a fast path to keep going instead of bouncing back to
+          // This Week — reused as the SAME form, not a parallel bulk-add
+          // UI, so "Add another job" below just resets this one.
+          setSavedConfirmation({ customerName, date: selectedDate });
+        }
+        if (aha) {
+          setAhaMoment(aha);
+        } else if (!isEarlySession) {
+          // Add is its own screen, so an established user's saved job
+          // returns to the week rather than clearing the form in place.
+          router.push("/");
+          router.refresh();
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save job.");
       }
@@ -410,6 +483,34 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
     }
   }
 
+  if (savedConfirmation) {
+    return (
+      <>
+        <div className="card">
+          <p className="success-text" style={{ marginTop: 0 }}>
+            ✓ {savedConfirmation.customerName} booked for{" "}
+            {formatSuggestionDate(savedConfirmation.date)}.
+          </p>
+          <div className="btn-row">
+            <button type="button" className="btn btn--primary" onClick={resetForm}>
+              Add another job
+            </button>
+            <button type="button" className="btn btn--outline" onClick={goToWeek}>
+              Back to This Week
+            </button>
+          </div>
+        </div>
+        {ahaMoment && (
+          <AhaMomentModal
+            payload={ahaMoment}
+            distanceUnit={distanceUnit}
+            onDismiss={dismissAhaMoment}
+          />
+        )}
+      </>
+    );
+  }
+
   const tone = suggestionTone();
   const shownDay = isUsingCustomDate ? customDateInfo : activeCandidate;
   const timeLabel =
@@ -420,6 +521,7 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
         : TIME_SLOT_OPTIONS.find((o) => o.value === timeSlotType)?.label ?? "";
 
   return (
+    <>
     <div>
       <form onSubmit={handleGetSuggestion}>
         <div className="field">
@@ -482,25 +584,17 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
           />
         </div>
 
-        <div className="field">
-          <label className="field-label" htmlFor="job-duration">
-            Duration in minutes (optional)
-          </label>
-          <input
-            id="job-duration"
-            className="input"
-            type="number"
-            min={1}
-            step="1"
-            value={durationMinutesInput}
-            onChange={(e) => handleDurationChange(e.target.value)}
-            placeholder={`Defaults to ${ASSUMED_JOB_DURATION_MINUTES} min`}
-          />
-          <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
-            How long this job actually takes — a real number here stops
-            quick jobs from silently crowding out longer ones nearby.
-          </p>
-        </div>
+        {timeSlotType !== "all_day" && (
+          <div className="field">
+            <label className="field-label">Duration (optional)</label>
+            <DurationFields value={durationMinutesInput} onChange={handleDurationChange} />
+            <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
+              Defaults to {ASSUMED_JOB_DURATION_MINUTES} min. How long this job
+              actually takes — a real number here stops quick jobs from
+              silently crowding out longer ones nearby.
+            </p>
+          </div>
+        )}
 
         <div className="field">
           <span className="field-label">Time</span>
@@ -733,5 +827,13 @@ export function NewJobForm({ distanceUnit }: { distanceUnit: DistanceUnit }) {
         </>
       )}
     </div>
+    {ahaMoment && (
+      <AhaMomentModal
+        payload={ahaMoment}
+        distanceUnit={distanceUnit}
+        onDismiss={dismissAhaMoment}
+      />
+    )}
+    </>
   );
 }

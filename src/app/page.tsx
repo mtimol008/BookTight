@@ -8,6 +8,7 @@ import { formatDateRange, formatShortDate } from "@/lib/format";
 import {
   getDayReviewStatus,
   getJobsForWeek,
+  getTotalJobCount,
   getUnreviewedSummary,
   type JobRecord,
 } from "@/lib/jobs";
@@ -82,25 +83,55 @@ function buildDayPlans(
   });
 }
 
+/** How many days to give a new account before the stall nudge appears —
+ *  zero jobs booked by then, not just zero jobs this particular week. */
+const STALL_NUDGE_DELAY_DAYS = 3;
+
+/** referenceNow as a default parameter (matching getTodayDateString's own
+ *  pattern in week.ts) rather than a bare Date.now() inline in the
+ *  component body, which React's purity check flags as an impure render
+ *  call. */
+function daysSince(isoTimestamp: string, referenceNow: Date = new Date()): number {
+  return (referenceNow.getTime() - new Date(isoTimestamp).getTime()) / 86_400_000;
+}
+
 export default async function Home() {
   const { startDate, endDate } = getCurrentWeekRange();
-  const [jobs, profile, unreviewed] = await Promise.all([
+  const [jobs, profile, unreviewed, totalJobCount] = await Promise.all([
     getJobsForWeek(startDate, endDate),
     getCurrentProfile(),
     getUnreviewedSummary(),
+    getTotalJobCount(),
   ]);
 
   // The one entry point sign-in already redirects to — gating here (rather
   // than on every route) means onboarding always runs before the app
-  // proper, without needing a guard on every single page.
+  // proper, without needing a guard on every single page. Same reasoning
+  // extends to the post-onboarding entry choice: every existing account
+  // defaults to entryChoiceMade being unset too (nothing backfills it —
+  // see the engagement_state migration), so this rolls out uniformly
+  // rather than only to new signups.
   if (profile && !profile.onboarding_completed_at) {
     redirect("/onboarding");
+  }
+  if (profile && !profile.engagement_state?.entryChoiceMade) {
+    redirect("/welcome");
   }
 
   const home = profile
     ? { latitude: profile.home_latitude, longitude: profile.home_longitude }
     : null;
   const days = buildDayPlans(jobs, home);
+
+  // Zero jobs EVER, not zero jobs this week — a light week is completely
+  // normal for an account in active use and must never trigger this; only
+  // "never once used Add a Job" should. No dismiss/tracking state: it just
+  // stops appearing the moment a job exists, same as the unreviewed banner.
+  const daysSinceOnboarding = profile?.onboarding_completed_at
+    ? daysSince(profile.onboarding_completed_at)
+    : 0;
+  const showStallNudge =
+    totalJobCount === 0 && daysSinceOnboarding >= STALL_NUDGE_DELAY_DAYS;
 
   return (
     <AppShell>
@@ -133,6 +164,20 @@ export default async function Home() {
             className="btn btn--warning btn--sm btn--pill"
           >
             Review
+          </Link>
+        </div>
+      )}
+
+      {showStallNudge && (
+        <div className="banner" style={{ marginTop: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div className="banner-title">Nothing booked yet</div>
+            <div className="banner-sub">
+              Add your first job and it&apos;ll show up here.
+            </div>
+          </div>
+          <Link href="/add" className="btn btn--warning btn--sm btn--pill">
+            Add a job
           </Link>
         </div>
       )}

@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { syncTimezoneIfDefault } from "@/app/account/actions";
+import { getEngagementState, markTourShown } from "@/app/actions";
+import { EngagementProvider } from "@/components/EngagementProvider";
+import { NavTour } from "@/components/NavTour";
+import type { EngagementState } from "@/lib/profiles";
 
 function WeekIcon() {
   return (
@@ -56,6 +60,34 @@ const NAV = [
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  // Starts empty (no hints/tour shown yet) rather than undefined, so
+  // <Hint> children always have a real Set to check against — they'd just
+  // render nothing extra for the brief window before the real state
+  // arrives, never crash on a missing context value.
+  const [engagementState, setEngagementState] = useState<EngagementState>({});
+  const [showTour, setShowTour] = useState(false);
+
+  // First real entry into the app, regardless of which /welcome choice
+  // was made: the tour only ever fires once, whenever this next fires
+  // true for the first time. Fetched per-mount rather than passed down
+  // from each page, since AppShell has no server-side data of its own
+  // today and adding it would mean touching every page that renders one.
+  useEffect(() => {
+    getEngagementState()
+      .then((state) => {
+        setEngagementState(state);
+        if (!state.tourShown) {
+          setShowTour(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  function dismissTour() {
+    setShowTour(false);
+    setEngagementState((current) => ({ ...current, tourShown: true }));
+    markTourShown().catch(() => {});
+  }
 
   // Flags the body while a form field has focus, so the fixed nav and FAB
   // can get out of the way of whatever the OS puts over the bottom of the
@@ -94,7 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <>
+    <EngagementProvider initialState={engagementState}>
       <main className="shell">{children}</main>
       <nav className="nav">
         {NAV.map(({ href, label, Icon }) => {
@@ -112,6 +144,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
-    </>
+      {showTour && <NavTour onDismiss={dismissTour} />}
+    </EngagementProvider>
   );
 }

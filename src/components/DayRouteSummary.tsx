@@ -10,6 +10,7 @@ const TIME_SLOT_LABELS: Record<TimeSlotType, string> = {
   evening: "Evening",
   night: "Night",
   specific: "Specific",
+  all_day: "All day",
 };
 
 function jobTimeLabel(job: JobRecord): string {

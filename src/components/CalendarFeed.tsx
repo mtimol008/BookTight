@@ -150,6 +150,22 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
                 </ol>
               </div>
 
+              <div>
+                <p className="field-label">Samsung Calendar (Galaxy phones)</p>
+                <p className="note" style={{ marginBottom: 8 }}>
+                  Samsung Calendar can&apos;t subscribe to a feed URL directly —
+                  add it to Google Calendar instead, and Samsung picks it up
+                  automatically through the Google account already synced on
+                  your phone.
+                </p>
+                <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>
+                  <li>On a computer, add the feed to Google Calendar using the steps above</li>
+                  <li>On your phone: <strong>Settings</strong> → <strong>Accounts and backup</strong> → <strong>Manage accounts</strong> → your Google account</li>
+                  <li>Make sure <strong>Calendar</strong> sync is turned on</li>
+                  <li>Open Samsung Calendar — the feed appears within a few minutes</li>
+                </ol>
+              </div>
+
               <p className="note" style={{ marginBottom: 0 }}>
                 Your calendar app will refresh this feed automatically every few
                 hours. Changes in Booktight (new jobs, time changes,

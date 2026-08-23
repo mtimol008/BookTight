@@ -72,9 +72,7 @@ export function BusinessRulesEditForm({ profile }: { profile: ProfileRecord }) {
             if (Number.isFinite(numericValue)) {
               const currentKm =
                 distanceUnit === "mi" ? numericValue / 0.621371 : numericValue;
-              setMaxTravelRange(
-                Math.round(distanceKmToUnit(currentKm, nextUnit)).toFixed(1)
-              );
+              setMaxTravelRange(distanceKmToUnit(currentKm, nextUnit).toFixed(1));
             }
           }}
         >

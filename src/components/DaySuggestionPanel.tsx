@@ -7,6 +7,7 @@ import {
   type SuggestionResult,
   type TimeSuggestion,
 } from "@/app/actions";
+import { Hint } from "@/components/Hint";
 import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import { ASSUMED_JOB_DURATION_MINUTES, type DayRoute, type TimeSlotType } from "@/lib/scheduling";
 import { getTodayDateString } from "@/lib/week";
@@ -167,10 +168,15 @@ export function DaySuggestionPanel({
     }
     timeSuggestionRequestRef.current = targetDate;
 
-    if (!suggestion.timeSuggestion) {
-      setSelectedDayTimeSuggestion(null);
-      return;
-    }
+    // Reuses the original answer (including null — genuinely nothing to
+    // report) when it's for the same day; otherwise always fetches fresh
+    // rather than assuming a null original answer means every other day
+    // will be null too. That assumption held while every request type
+    // that could ever produce a non-null answer here (flexible, named
+    // slot) did so consistently across all-day candidates — it doesn't
+    // hold for "all_day" requests, where whether there's anything to
+    // report depends on whether THIS specific day already has something
+    // booked, not on the request type alone.
     if (targetDate === suggestion.suggestion.day.date) {
       setSelectedDayTimeSuggestion(suggestion.timeSuggestion);
       return;
@@ -219,11 +225,6 @@ export function DaySuggestionPanel({
   function refreshTimeSuggestionFor(date: string) {
     timeSuggestionRequestRef.current = date;
     setAcceptTimeSuggestion(false);
-
-    if (!suggestion.timeSuggestion) {
-      setSelectedDayTimeSuggestion(null);
-      return;
-    }
 
     if (date === suggestion.suggestion.day.date) {
       setSelectedDayTimeSuggestion(suggestion.timeSuggestion);
@@ -421,6 +422,12 @@ export function DaySuggestionPanel({
         {finalTimeLabel ? ` · ${finalTimeLabel}` : ""}
       </div>
 
+      <Hint id="suggestion-panel">
+        This is the day Booktight thinks fits best, based on your other jobs
+        and how far apart everything is. You can always pick a different
+        day below.
+      </Hint>
+
       {shownDay && (
         <div className="suggest-meta">
           {dayDetailLine(shownDay, unit)}
@@ -531,6 +538,11 @@ export function DaySuggestionPanel({
 
       {warningDay && (
         <div className="warn-block">
+          <Hint id="warning-block">
+            A warning like this doesn&apos;t block anything — it&apos;s just
+            a heads-up before you commit. &ldquo;Book it anyway&rdquo;
+            always still works.
+          </Hint>
           {warningDay.addedDistanceKm > suggestion.maxTravelRangeKm && (
             <p>
               This adds {formatDistance(warningDay.addedDistanceKm, unit)} of extra driving on{" "}
