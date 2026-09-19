@@ -45,6 +45,18 @@ export function WorkingHoursFields({
                 {WEEKDAY_LABELS[day]}
               </label>
               <div className="btn-row">
+                {/* A disabled input is never included in FormData, so an
+                    off day's hours would otherwise vanish on submit and
+                    get overwritten by readDayHours' fallback. These mirrors
+                    carry the same value while the day is off so it's
+                    preserved instead — never rendered once it's back on,
+                    since the visible input submits for itself then. */}
+                {!dayHours.enabled && (
+                  <>
+                    <input type="hidden" name={`${day}-start`} value={dayHours.start} />
+                    <input type="hidden" name={`${day}-end`} value={dayHours.end} />
+                  </>
+                )}
                 <input
                   id={startId}
                   aria-label={`${WEEKDAY_LABELS[day]} start time`}

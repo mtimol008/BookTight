@@ -736,16 +736,20 @@ export interface PlannedClockTime {
  * shows "Morning" / "9:00am" / etc. exactly as it always has.
  *
  * A "specific" job keeps its literal stored time, always — that's a real
- * commitment the user typed, never moved. Every other timed job (a named
- * slot) is chained forward from whatever precedes it: the previous stop's
- * end plus travel time to here, or the day's own start plus travel from
- * home for the first stop — same formula computeGapWindow already uses for
- * a home-adjacent gap, just walked across the whole day instead of
- * checked once. Deliberately does NOT clamp a named slot back inside its
- * nominal range (e.g. force "morning" to stay before noon) when a busy day
- * pushes it later — clamping backward would shove it in front of the job
- * that's actually before it, recreating the overlap this exists to fix.
- * The honest time, not an invented one.
+ * commitment the user typed, never moved. Every other timed job is chained
+ * forward from whatever precedes it: the previous stop's end plus travel
+ * time to here, or the day's own start plus travel from home for the first
+ * stop — same formula computeGapWindow already uses for a home-adjacent
+ * gap, just walked across the whole day instead of checked once. A named
+ * slot additionally floors that chained time at its own anchorMinutes
+ * (2pm for "afternoon", etc.) — without this, a slot with nothing booked
+ * before it chains from the start of the working day instead of from
+ * anywhere near its actual time of day, which is exactly wrong for the one
+ * thing this function exists to produce. Deliberately does NOT clamp a
+ * named slot back inside its nominal range (e.g. force "morning" to stay
+ * before noon) when a busy day pushes it later — clamping backward would
+ * shove it in front of the job that's actually before it, recreating the
+ * overlap this exists to fix. The honest time, not an invented one.
  */
 export function planDayClockTimes(
   home: Coordinates,
@@ -775,7 +779,9 @@ export function planDayClockTimes(
     const startMinutes =
       stop.timeType === "specific" && stop.sortKeyMinutes !== null
         ? stop.sortKeyMinutes
-        : Math.max(arrivalMinutes, dayHours.startMinutes);
+        : isNamedSlot(stop.timeType)
+          ? Math.max(arrivalMinutes, dayHours.startMinutes, NAMED_SLOT_RANGES[stop.timeType].anchorMinutes)
+          : Math.max(arrivalMinutes, dayHours.startMinutes);
 
     const endMinutes = startMinutes + stop.durationMinutes;
     results.push({ jobId: stop.id, startMinutes, endMinutes });
@@ -877,8 +883,11 @@ export interface DayTimeOption {
   fits: boolean;
   /** Why fits is false, when it's for a reason a plain gap-shortfall
    *  message would misrepresent. null covers the ordinary "no gap works"
-   *  case (blockedSlots/shortfallMinutes below already explain that one). */
-  blockedReason: "day-off" | "all-day-conflict" | null;
+   *  case (blockedSlots/shortfallMinutes below already explain that one).
+   *  "outside-working-hours": the requested named slot has zero overlap
+   *  with the day's working hours at all — a different, more honest thing
+   *  to say than "it's full", which implies bookings are the reason. */
+  blockedReason: "day-off" | "all-day-conflict" | "outside-working-hours" | null;
   /** What actually constrains the chosen gap. isHome covers the start/end
    *  of the working day. Meaningful when fits === true. */
   previousNeighbor: RouteNeighbor;
@@ -1371,8 +1380,19 @@ export function suggestBestDay(
     // use the cheapest one that actually works.
     const isFlexible = newJobTime.type === "none";
     const requestedSlot = isNamedSlot(newJobTime.type) ? newJobTime.type : null;
+
+    // A requested named slot with zero overlap against the day's actual
+    // working hours (e.g. "Night" when the day ends at 6pm) can never be
+    // booked here no matter what else is going on — decided upfront, the
+    // same way day-off/all-day-conflict are, rather than running the full
+    // gap search only to watch every single gap fail for the same reason.
+    const slotOutsideWorkingHours =
+      !!requestedSlot &&
+      (NAMED_SLOT_RANGES[requestedSlot].startMinutes >= dayWindow.workdayEndMinutes ||
+        NAMED_SLOT_RANGES[requestedSlot].endMinutes <= dayWindow.workdayStartMinutes);
+
     const gapAnalysis =
-      dayHours.enabled && (isFlexible || requestedSlot)
+      dayHours.enabled && !slotOutsideWorkingHours && (isFlexible || requestedSlot)
         ? analyzeDayGaps(
             newJob,
             home,
@@ -1421,7 +1441,20 @@ export function suggestBestDay(
             slot: null,
             blockedSlots: [],
           }
-        : (gapAnalysis?.option ?? null);
+        : slotOutsideWorkingHours
+          ? {
+              fits: false,
+              blockedReason: "outside-working-hours",
+              previousNeighbor: buildNeighbor(null, newJob, home),
+              nextNeighbor: buildNeighbor(null, newJob, home),
+              earliestStartMinutes: dayWindow.workdayStartMinutes,
+              latestStartMinutes: dayWindow.workdayEndMinutes,
+              shortfallMinutes: null,
+              startMinutes: null,
+              slot: null,
+              blockedSlots: [],
+            }
+          : (gapAnalysis?.option ?? null);
 
     // A flexible job whose suggestion resolved to a NAMED slot (a wide
     // window, not an exact time) doesn't actually get inserted at "the gap

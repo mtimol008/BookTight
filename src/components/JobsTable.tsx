@@ -679,6 +679,12 @@ export function JobsTable({
                   // scoped to this one day's render, reset every time this
                   // day's card re-renders.
                   let previousSection: TimeSlotType | null = null;
+                  // Unlike the header (which re-earns its keep every time
+                  // a section resumes after an interruption — real routing
+                  // information), the drag hint is just a one-time tip and
+                  // shouldn't repeat just because the same section's header
+                  // happens to show up twice on one day.
+                  let dragHintAlreadyShown = false;
 
                   return day.stops.map((stop, stopIndex) => {
                     const job = stop.job;
@@ -700,13 +706,20 @@ export function JobsTable({
                         date={day.date}
                       />
                     ) : null;
-                    const dragHint =
-                      showHeader && section !== null && (sectionCounts.get(section) ?? 0) >= 2 ? (
-                        <Hint key={`drag-hint-${job.id}`} id="drag-reorder">
-                          Jobs in the same time-of-day group can be dragged
-                          (using the handle on the right) to reorder them.
-                        </Hint>
-                      ) : null;
+                    const showDragHint =
+                      showHeader &&
+                      !dragHintAlreadyShown &&
+                      section !== null &&
+                      (sectionCounts.get(section) ?? 0) >= 2;
+                    if (showDragHint) {
+                      dragHintAlreadyShown = true;
+                    }
+                    const dragHint = showDragHint ? (
+                      <Hint key={`drag-hint-${job.id}`} id="drag-reorder">
+                        Jobs in the same time-of-day group can be dragged
+                        (using the handle on the right) to reorder them.
+                      </Hint>
+                    ) : null;
 
                   if (editingId === job.id && editValues && daySuggestion) {
                     return [

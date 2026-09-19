@@ -122,7 +122,16 @@ button:disabled {
   background-position: top center, top left;
   background-attachment: fixed, scroll;
   background-size: contain, 28px 28px;
-  padding: 20px 18px calc(var(--nav-height) + 28px);
+  /* Clears both the fixed nav bar and, on the one screen that has one
+   * today, the floating add-job button above it (see .fab below: a 16px
+   * gap plus its own 52px circle, further up than the nav alone needs).
+   * Reserved here rather than only on that page, since .shell's own
+   * min-height keeps a light week's card list on one screen with no
+   * scroll to reveal what's hidden — a shorter padding here would leave
+   * real content sitting permanently behind the button on exactly that
+   * page. A little extra whitespace at the bottom of every other screen
+   * is the harmless trade-off. */
+  padding: 20px 18px calc(var(--nav-height) + 16px + 52px + 16px);
   position: relative;
 }
 

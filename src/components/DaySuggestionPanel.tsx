@@ -298,6 +298,14 @@ export function DaySuggestionPanel({
     setCustomDateError(null);
     customDateRequestRef.current = value;
 
+    // The date input's min attribute doesn't stop a date being typed
+    // directly into it — catch that here instead of letting it run the
+    // whole suggestion/warning flow only to fail at the very last step.
+    if (value && value < getTodayDateString()) {
+      setCustomDateError("Pick a date that hasn't already passed.");
+      return;
+    }
+
     if (value) {
       selectDay(value);
     } else {

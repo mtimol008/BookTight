@@ -4,7 +4,13 @@
 // enforce the same rules the DB check constraints already enforce.
 
 import type { DistanceUnit } from "./format";
-import { WEEKDAY_KEYS, WEEKDAY_LABELS, type Weekday } from "./scheduling";
+import {
+  DEFAULT_SCHEDULING_PREFERENCES,
+  WEEKDAY_KEYS,
+  WEEKDAY_LABELS,
+  minutesToTimeValue,
+  type Weekday,
+} from "./scheduling";
 
 const MILES_PER_KILOMETER = 0.621371;
 
@@ -40,8 +46,20 @@ function readDayHours(
 
   if (!enabled) {
     // Hours are still stored (so re-enabling later has something sensible
-    // to show), just not validated — an off day's hours don't matter.
-    return { value: { enabled: false, start: start || "08:00", end: end || "17:00" } };
+    // to show), just not validated — an off day's hours don't matter. The
+    // client always submits the day's real current value even while it's
+    // disabled (see WorkingHoursFields' hidden mirror inputs), so start/end
+    // being blank here should only happen for a genuinely missing value —
+    // fall back to the app's own actual default rather than an arbitrary
+    // literal that doesn't match it.
+    const fallback = DEFAULT_SCHEDULING_PREFERENCES.workingHours[day];
+    return {
+      value: {
+        enabled: false,
+        start: start || minutesToTimeValue(fallback.startMinutes),
+        end: end || minutesToTimeValue(fallback.endMinutes),
+      },
+    };
   }
 
   if (!start || !end) {

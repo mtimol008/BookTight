@@ -307,6 +307,21 @@ function buildTimeVerdict(
       return null;
     }
     const slotName = namedSlotLabel(requestedTime.type);
+    // blockedSlots only ever lists slots that real fixed-time bookings
+    // occupy (see blockedSlotsFor in scheduling.ts) — a flexible job can't
+    // populate it, since it imposes no clock bound of its own. So an empty
+    // list here, combined with a fit failure, can only mean the slot
+    // itself doesn't leave enough room inside working hours — never that
+    // something else is "in the way", which is what "is full" implies.
+    if (option.blockedReason === "outside-working-hours" || option.blockedSlots.length === 0) {
+      return {
+        fits: false,
+        slot: null,
+        specificTime: null,
+        label: null,
+        reasoning: `${slotName} doesn't leave enough room inside your working hours for this job on that day — nothing else is actually booked. Try another day, change the time, or extend your working hours in Account.`,
+      };
+    }
     return {
       fits: false,
       slot: null,

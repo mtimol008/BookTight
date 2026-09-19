@@ -139,6 +139,10 @@ export function NewJobForm({
   function setSelectedDate(date: string) {
     setSelectedDateRaw(date);
     setWarningDay(null);
+    // A save-time error (e.g. a rejected past date) shouldn't linger once
+    // a different day has actually been picked — every date-changing path
+    // funnels through here.
+    setError(null);
   }
 
   function resetCustomDateState() {
@@ -317,6 +321,14 @@ export function NewJobForm({
     setCustomDateError(null);
     customDateRequestRef.current = value;
 
+    // The date input's min attribute doesn't stop a date being typed
+    // directly into it — catch that here instead of letting it run the
+    // whole suggestion/warning flow only to fail at the very last step.
+    if (value && value < getTodayDateString()) {
+      setCustomDateError("Pick a date that hasn't already passed.");
+      return;
+    }
+
     if (value) {
       selectDay(value);
     } else if (activeCandidate) {
@@ -471,8 +483,8 @@ export function NewJobForm({
   // teal of a genuine recommendation.
   function suggestionTone(): { className: string; label: string } {
     if (!suggestion) return { className: "suggest", label: "Suggested" };
-    if (candidateIndex > 0) return { className: "suggest", label: "Next best" };
     if (isUsingCustomDate) return { className: "suggest", label: "Your date" };
+    if (candidateIndex > 0) return { className: "suggest", label: "Next best" };
     switch (suggestion.suggestion.kind) {
       case "clustered":
         return { className: "suggest suggest--accent", label: "Groups with a nearby job" };

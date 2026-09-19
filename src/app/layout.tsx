@@ -25,6 +25,15 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Booktight",
   description: "Job scheduling that minimizes driving distance",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/favicon.svg", sizes: "any", type: "image/svg+xml" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
