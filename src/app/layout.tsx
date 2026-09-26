@@ -27,7 +27,10 @@ export const metadata: Metadata = {
   description: "Job scheduling that minimizes driving distance",
   icons: {
     icon: "/favicon-96x96.png?v=2",
-    apple: "/apple-touch-icon-v2.png",
+    apple: [
+      "/apple-touch-icon.png",
+      "/apple-touch-icon-v2.png",
+    ],
   },
   manifest: "/manifest.json",
 };
