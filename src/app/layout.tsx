@@ -26,10 +26,7 @@ export const metadata: Metadata = {
   title: "Booktight",
   description: "Job scheduling that minimizes driving distance",
   icons: {
-    icon: [
-      { url: "/favicon.ico?v=2", sizes: "any" },
-      { url: "/favicon-96x96.png?v=2", sizes: "96x96", type: "image/png" },
-    ],
+    icon: "/favicon-96x96.png?v=2",
     apple: "/apple-touch-icon.png?v=2",
   },
   manifest: "/manifest.json",
