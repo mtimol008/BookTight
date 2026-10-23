@@ -137,15 +137,6 @@ function namedSlotLabel(slot: string): string {
   return slot.charAt(0).toUpperCase() + slot.slice(1);
 }
 
-/** "45 minutes" / "about 6 hours" — enough to convey the scale of a gap. */
-function formatApproxDuration(minutes: number): string {
-  const rounded = Math.round(minutes);
-  if (rounded < 90) {
-    return `${rounded} minutes`;
-  }
-  return `about ${Math.round(rounded / 60)} hours`;
-}
-
 /** ["morning", "afternoon"] -> "Morning and afternoon". */
 function listSlots(slots: string[]): string {
   const labels = slots.map((slot, index) =>

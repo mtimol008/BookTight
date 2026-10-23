@@ -85,7 +85,7 @@ export function WorkingHoursFields({
         })}
       </div>
       <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
-        Turn off any day you don't work. Used when there's no booked job to
+        Turn off any day you don&rsquo;t work. Used when there&rsquo;s no booked job to
         anchor a suggested time against.
       </p>
     </div>

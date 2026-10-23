@@ -60,11 +60,9 @@ function parseDurationInput(timeSlotType: TimeSlotType, value: string): number |
  * `scheduled` — there's no separate "reviewed" flag to keep in sync.
  */
 export function DayReview({
-  date,
   jobs,
   distanceUnit,
 }: {
-  date: string;
   jobs: JobRecord[];
   distanceUnit: DistanceUnit;
 }) {

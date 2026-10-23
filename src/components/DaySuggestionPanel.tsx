@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   getDayRouteInfo,
   getDayTimeSuggestion,
@@ -120,11 +120,16 @@ export function DaySuggestionPanel({
   const unit = distanceUnit ?? suggestion.distanceUnit ?? "km";
  
   // The time this panel is placing, in the shape the actions expect.
-  const panelRequestedTime = {
-    type: requestedTime.type,
-    specificTime:
-      requestedTime.type === "specific" ? requestedTime.specificTime : undefined,
-  };
+  // Memoized so the effect below can depend on it without refetching on
+  // every render — only type/specificTime changing should trigger that.
+  const panelRequestedTime = useMemo(
+    () => ({
+      type: requestedTime.type,
+      specificTime:
+        requestedTime.type === "specific" ? requestedTime.specificTime : undefined,
+    }),
+    [requestedTime.type, requestedTime.specificTime]
+  );
 
   // Tracks the last (day order, host context) this effect reset against —
   // NOT suggestion identity. getSchedulingSuggestion returns a brand-new
@@ -203,7 +208,7 @@ export function DaySuggestionPanel({
     return () => {
       cancelled = true;
     };
-  }, [suggestion, currentDate, jobId, durationMinutes]);
+  }, [suggestion, currentDate, jobId, durationMinutes, panelRequestedTime]);
 
   function setSelectedDate(date: string) {
     setSelectedDateRaw(date);

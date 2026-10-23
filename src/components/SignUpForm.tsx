@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useActionState } from "react";
+import { useRef, useState, useActionState, useSyncExternalStore } from "react";
 import { signUp, type SignUpState } from "@/app/signup/actions";
 import { getAddressSuggestions } from "@/app/actions";
 import { EyeIcon, EyeOffIcon, PinIcon } from "@/components/icons";
@@ -8,17 +8,33 @@ import type { AddressSuggestion } from "@/lib/geocoding";
 
 const initialState: SignUpState = {};
 
+// No real subscription — the browser's timezone doesn't change mid-session —
+// but useSyncExternalStore still needs a subscribe function.
+function subscribeToNothing() {
+  return () => {};
+}
+function getTimezoneSnapshot() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+function getTimezoneServerSnapshot() {
+  return "";
+}
+
 export function SignUpForm() {
   const [state, formAction, isPending] = useActionState(signUp, initialState);
 
   const [homeAddress, setHomeAddress] = useState("");
-  // Empty until after mount, then filled from the browser — set this way
-  // (not read directly during render) so server and client render the same
-  // initial HTML and React doesn't warn about a hydration mismatch.
-  const [timezone, setTimezone] = useState("");
-  useEffect(() => {
-    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  }, []);
+  // "" on the server (and on the client's first render, before hydration),
+  // the real IANA timezone once hydrated — so server and client render the
+  // same initial HTML (no hydration mismatch) without an effect, and
+  // without the risk of a plain useEffect+setState: this stays correct
+  // across a failed-then-retried submit, since it's a controlled input
+  // recomputed on every render rather than reset to a stale defaultValue.
+  const timezone = useSyncExternalStore(
+    subscribeToNothing,
+    getTimezoneSnapshot,
+    getTimezoneServerSnapshot
+  );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);

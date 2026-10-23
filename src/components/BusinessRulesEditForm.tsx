@@ -80,7 +80,7 @@ export function BusinessRulesEditForm({ profile }: { profile: ProfileRecord }) {
           <option value="mi">Miles (mi)</option>
         </select>
         <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
-          Choose the unit you'd like distances to be displayed in.
+          Choose the unit you&rsquo;d like distances to be displayed in.
         </p>
       </div>
 
@@ -100,7 +100,7 @@ export function BusinessRulesEditForm({ profile }: { profile: ProfileRecord }) {
           onChange={(e) => setMaxTravelRange(e.target.value)}
         />
         <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
-          How far a job can add to a day's driving before it's no longer
+          How far a job can add to a day&rsquo;s driving before it&rsquo;s no longer
           recommended without a good reason.
         </p>
       </div>
@@ -120,7 +120,7 @@ export function BusinessRulesEditForm({ profile }: { profile: ProfileRecord }) {
           defaultValue={profile.max_jobs_per_day ?? ""}
         />
         <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
-          Leave blank for no cap. A day already at this many jobs won't be
+          Leave blank for no cap. A day already at this many jobs won&rsquo;t be
           suggested, and picking it manually warns first.
         </p>
       </div>

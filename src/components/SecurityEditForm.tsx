@@ -42,7 +42,7 @@ export function SecurityEditForm({ email }: { email: string }) {
         />
         <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
           Changing this sends a confirmation link to the new address — the
-          change won't take effect until you click it.
+          change won&rsquo;t take effect until you click it.
         </p>
       </div>
 

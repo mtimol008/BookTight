@@ -33,7 +33,7 @@ export default async function ReviewPage({
         <h1 className="screen-title">Review {formatDayTitle(date)}</h1>
       </div>
 
-      <DayReview date={date} jobs={jobs} distanceUnit={profile?.distance_unit ?? "km"} />
+      <DayReview jobs={jobs} distanceUnit={profile?.distance_unit ?? "km"} />
     </AppShell>
   );
 }
