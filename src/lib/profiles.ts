@@ -37,6 +37,9 @@ export interface ProfileRecord {
   timezone: string;
   /** null = no cap. */
   max_jobs_per_day: number | null;
+  /** Extra minutes required between two real jobs, on top of travel time.
+   *  0 = off (no change from the engine's original behavior). */
+  buffer_minutes: number;
   /** null = onboarding not completed yet; gates the "/" screen. */
   onboarding_completed_at: string | null;
   /** null until the feed's been enabled at least once. */

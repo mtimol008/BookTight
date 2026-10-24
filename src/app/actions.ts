@@ -23,6 +23,7 @@ import {
   minutesToTimeValue,
   weekdayKeyOf,
   SUGGESTION_LOOKAHEAD_WEEKS,
+  WHENEVER_LOOKAHEAD_WEEKS,
   WEEKDAY_KEYS,
   WEEKDAY_LABELS,
   type DayHours,
@@ -30,6 +31,7 @@ import {
   type DaySuggestion,
   type ExistingJob,
   type JobTime,
+  type JobUrgency,
   type ManualOrderComparison,
   type RouteNeighbor,
   type SchedulingPreferences,
@@ -50,6 +52,9 @@ import { revalidatePath } from "next/cache";
 export interface RequestedTime {
   type: TimeSlotType;
   specificTime?: string;
+  /** Optional — undefined reads the same as "normal", the engine's
+   *  original (unchanged) behavior. */
+  urgency?: JobUrgency;
 }
 
 export interface TimeSuggestion {
@@ -95,6 +100,7 @@ function schedulingPreferencesFromProfile(profile: ProfileRecord): SchedulingPre
     maxTravelRangeKm: profile.max_travel_range_km,
     workingHours,
     maxJobsPerDay: profile.max_jobs_per_day,
+    bufferMinutes: profile.buffer_minutes,
   };
 }
 
@@ -385,18 +391,25 @@ export async function getSchedulingSuggestion(
     );
   }
 
+  const urgency: JobUrgency = requestedTime.urgency ?? "normal";
+
   // Looks SUGGESTION_LOOKAHEAD_WEEKS out, not just the currently-viewed
   // week — otherwise a job 2-3 weeks out that this one should genuinely
   // cluster with is invisible to ranking entirely, only reachable by
-  // manually typing that exact date into "Different date".
+  // manually typing that exact date into "Different date". A "whenever"
+  // job is explicitly fine waiting, so it searches much further out
+  // (WHENEVER_LOOKAHEAD_WEEKS) rather than being artificially limited to
+  // the same near-term window as a normal or urgent request.
+  const lookaheadWeeks =
+    urgency === "whenever" ? WHENEVER_LOOKAHEAD_WEEKS : SUGGESTION_LOOKAHEAD_WEEKS;
   const { startDate: currentMonday } = getCurrentWeekRange();
-  const { endDate } = getWeekRange(currentMonday, SUGGESTION_LOOKAHEAD_WEEKS);
+  const { endDate } = getWeekRange(currentMonday, lookaheadWeeks);
   const weekJobs = await getJobsForWeek(currentMonday, endDate);
   const now = nowForScheduling(profile);
   // Exclude days that have already passed — the range always starts on
   // this week's Monday, but a day before today isn't actually bookable
   // anymore. The user's own today, not the server's (see nowForScheduling).
-  const candidateDates = getWeekDates(currentMonday, SUGGESTION_LOOKAHEAD_WEEKS).filter(
+  const candidateDates = getWeekDates(currentMonday, lookaheadWeeks).filter(
     (date) => date >= now.todayDate
   );
 
@@ -427,7 +440,8 @@ export async function getSchedulingSuggestion(
     existingJobs,
     preferences,
     durationMinutes,
-    now
+    now,
+    urgency
   );
 
   if (!result) {
@@ -511,7 +525,9 @@ export async function getDayRouteInfo(
     [date],
     existingJobs,
     schedulingPreferencesFromProfile(profile),
-    durationMinutes
+    durationMinutes,
+    nowForScheduling(profile),
+    requestedTime.urgency ?? "normal"
   );
 
   if (!result) {
@@ -566,7 +582,8 @@ export async function getDayTimeSuggestion(
     existingJobs,
     schedulingPreferencesFromProfile(profile),
     durationMinutes,
-    nowForScheduling(profile)
+    nowForScheduling(profile),
+    requestedTime.urgency ?? "normal"
   );
 
   if (!result) {
@@ -651,6 +668,9 @@ export interface ConfirmJobInput {
   customerName: string;
   description: string;
   durationMinutes: number | null;
+  /** Optional — undefined/omitted stores "normal", same as every job
+   *  booked before urgency existed. */
+  urgency?: JobUrgency;
 }
 
 export async function confirmAndSaveJob(
@@ -675,6 +695,7 @@ export async function confirmAndSaveJob(
     customer_name: input.customerName,
     description: input.description,
     duration_minutes: input.durationMinutes,
+    urgency: input.urgency ?? "normal",
   });
 
   revalidatePath("/");
@@ -690,6 +711,9 @@ export interface UpdateJobFormInput {
   customerName: string;
   description: string;
   durationMinutes: number | null;
+  /** Optional — omitted preserves whatever the job already had, rather
+   *  than silently resetting it to "normal" on every edit. */
+  urgency?: JobUrgency;
 }
 
 export async function updateExistingJob(
@@ -736,6 +760,7 @@ export async function updateExistingJob(
     customer_name: input.customerName,
     description: input.description,
     duration_minutes: input.durationMinutes,
+    urgency: input.urgency ?? current?.urgency ?? "normal",
     ...(movedGroups ? { manual_position: null } : {}),
   });
 

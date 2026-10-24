@@ -17,7 +17,12 @@ import { PinIcon } from "@/components/icons";
 import { DurationFields } from "@/components/DurationFields";
 import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import type { AddressSuggestion } from "@/lib/geocoding";
-import { ASSUMED_JOB_DURATION_MINUTES, type DayRoute, type TimeSlotType } from "@/lib/scheduling";
+import {
+  ASSUMED_JOB_DURATION_MINUTES,
+  type DayRoute,
+  type JobUrgency,
+  type TimeSlotType,
+} from "@/lib/scheduling";
 import { getTodayDateString } from "@/lib/week";
 
 const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
@@ -28,6 +33,12 @@ const TIME_SLOT_OPTIONS: { value: TimeSlotType; label: string }[] = [
   { value: "specific", label: "Specific" },
   { value: "all_day", label: "All day" },
   { value: "none", label: "Flexible" },
+];
+
+const URGENCY_OPTIONS: { value: JobUrgency; label: string; description: string }[] = [
+  { value: "urgent", label: "Urgent", description: "Earliest day that fits, even if it's not the cheapest to drive to." },
+  { value: "normal", label: "Normal", description: "The usual balance of soonest-and-cheapest." },
+  { value: "whenever", label: "Whenever", description: "No rush — looks further ahead and prefers filling an otherwise-awkward gap." },
 ];
 
 function dayDetailLine(day: DayRoute, unit: DistanceUnit): string {
@@ -84,6 +95,7 @@ export function NewJobForm({
   const [durationMinutesInput, setDurationMinutesInput] = useState("");
   const [timeSlotType, setTimeSlotType] = useState<TimeSlotType>("none");
   const [specificTime, setSpecificTime] = useState("");
+  const [urgency, setUrgency] = useState<JobUrgency>("normal");
 
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
@@ -172,6 +184,7 @@ export function NewJobForm({
     setDurationMinutesInput("");
     setTimeSlotType("none");
     setSpecificTime("");
+    setUrgency("normal");
     setAddressSuggestions([]);
     setShowAddressSuggestions(false);
     setSelectedDateRaw("");
@@ -213,6 +226,7 @@ export function NewJobForm({
           {
             type: timeSlotType,
             specificTime: timeSlotType === "specific" ? specificTime : undefined,
+            urgency,
           },
           date,
           undefined,
@@ -272,6 +286,11 @@ export function NewJobForm({
     invalidateSuggestion();
   }
 
+  function handleUrgencyChange(value: JobUrgency) {
+    setUrgency(value);
+    invalidateSuggestion();
+  }
+
   function handleGetSuggestion(event: FormEvent) {
     event.preventDefault();
     setError(null);
@@ -300,6 +319,7 @@ export function NewJobForm({
           {
             type: timeSlotType,
             specificTime: timeSlotType === "specific" ? specificTime : undefined,
+            urgency,
           },
           undefined,
           durationMinutes
@@ -347,6 +367,7 @@ export function NewJobForm({
           {
             type: timeSlotType,
             specificTime: timeSlotType === "specific" ? specificTime : undefined,
+            urgency,
           },
           value,
           undefined,
@@ -400,6 +421,7 @@ export function NewJobForm({
           customerName,
           description,
           durationMinutes,
+          urgency,
         });
 
         // Whatever happens next (the confirmation card, or leaving for
@@ -634,6 +656,30 @@ export function NewJobForm({
             />
           )}
         </div>
+
+        <details>
+          <summary className="btn--quiet" style={{ cursor: "pointer" }}>
+            More options
+          </summary>
+          <div className="field" style={{ marginTop: 12 }}>
+            <span className="field-label">Urgency</span>
+            <div className="chips">
+              {URGENCY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`chip${urgency === option.value ? " is-selected" : ""}`}
+                  onClick={() => handleUrgencyChange(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
+              {URGENCY_OPTIONS.find((o) => o.value === urgency)?.description}
+            </p>
+          </div>
+        </details>
 
         {error && <p className="error-text">{error}</p>}
 

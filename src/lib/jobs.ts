@@ -20,6 +20,7 @@ export interface JobRecord {
    *  sharing this job's (date, time_slot_type). */
   manual_position: number | null;
   status: JobStatus;
+  urgency: string;
   created_at: string;
 }
 
@@ -259,6 +260,7 @@ export interface NewJobInput {
   customer_name: string;
   description: string;
   duration_minutes: number | null;
+  urgency: string;
 }
 
 export async function insertJob(job: NewJobInput): Promise<JobRecord> {

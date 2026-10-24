@@ -21,6 +21,11 @@ export interface JobTime {
   specificTime?: string;
 }
 
+/** How soon a job needs doing, independent of WHEN in the day it happens
+ *  (that's JobTime/TimeSlotType) — this is about which DAY wins when more
+ *  than one otherwise fits. See suggestBestDay's `urgency` parameter. */
+export type JobUrgency = "urgent" | "normal" | "whenever";
+
 export interface ExistingJob extends Coordinates {
   id: string;
   /** ISO date string, e.g. "2026-08-10". Jobs are grouped by this value. */
@@ -152,6 +157,9 @@ export interface SchedulingPreferences {
   workingHours: Record<Weekday, DayHours>;
   /** null = no cap, same as today's actual (uncapped) behavior. */
   maxJobsPerDay: number | null;
+  /** Extra minutes required between two real jobs, on top of travel time.
+   *  0 = no change from the engine's original (no-buffer) behavior. */
+  bufferMinutes: number;
 }
 
 const DEFAULT_WEEKDAY_HOURS: DayHours = {
@@ -178,6 +186,7 @@ export const DEFAULT_SCHEDULING_PREFERENCES: SchedulingPreferences = {
     sat: DEFAULT_WEEKEND_HOURS,
   },
   maxJobsPerDay: null,
+  bufferMinutes: 0,
 };
 
 /** A profile's stored per-day working-hours shape, straight from the
@@ -215,6 +224,11 @@ interface DayScheduleWindow {
   maxTravelRangeKm: number;
   workdayStartMinutes: number;
   workdayEndMinutes: number;
+  /** Extra minutes required between two REAL jobs on top of travel time —
+   *  never applied against the start/end of the working day itself, since
+   *  that's not a job-to-job transition. 0 = no change from pre-buffer
+   *  behavior. */
+  bufferMinutes: number;
 }
 
 /** Below this, an existing job is "close enough" to the new one to be worth
@@ -237,6 +251,18 @@ export const MEANINGFUL_REORDER_DELTA_KM = 1;
  *  engine starts reaching for dates a tradesperson wouldn't actually be
  *  thinking about yet. Tune freely. */
 export const SUGGESTION_LOOKAHEAD_WEEKS = 4;
+
+/** A "whenever" job is explicitly fine waiting, so its own candidate search
+ *  looks much further out than the normal 4 weeks — capped, not unbounded,
+ *  so the engine never reaches for a date nobody is realistically planning
+ *  around yet. */
+export const WHENEVER_LOOKAHEAD_WEEKS = 12;
+
+/** Caps how much a tighter-fitting gap can nudge a "whenever" job's ranking
+ *  — small enough relative to real km distances that it only ever breaks a
+ *  near-tie between two similarly-distant days, never overrides a genuine
+ *  distance difference. */
+const WHENEVER_GAP_FILL_WEIGHT_KM_PER_MINUTE = 0.001;
 
 /** How much one day further out costs in the ranking, in the same km terms
  *  as addedDistanceKm — a gentle bias, not a rule. Before the lookahead
@@ -844,7 +870,8 @@ function computeTimeFeasibility(
   newSortKeyMinutes: number,
   previousNeighbor: RouteNeighbor,
   nextNeighbor: RouteNeighbor,
-  newJobDurationMinutes: number
+  newJobDurationMinutes: number,
+  bufferMinutes: number
 ): TimeFeasibility {
   let previousGapMinutes: number | null = null;
   let previousTravelMinutes: number | null = null;
@@ -852,9 +879,10 @@ function computeTimeFeasibility(
   if (!previousNeighbor.isHome && previousNeighbor.sortKeyMinutes !== null) {
     previousGapMinutes = newSortKeyMinutes - previousNeighbor.sortKeyMinutes;
     previousTravelMinutes = estimateTravelMinutes(previousNeighbor.distanceKm);
-    // Not just the drive — the previous job has to actually finish first.
+    // Not just the drive — the previous job has to actually finish first,
+    // plus whatever buffer the account wants between two real jobs.
     previousConflict =
-      previousGapMinutes < previousNeighbor.durationMinutes + previousTravelMinutes;
+      previousGapMinutes < previousNeighbor.durationMinutes + previousTravelMinutes + bufferMinutes;
   }
 
   let nextGapMinutes: number | null = null;
@@ -864,7 +892,7 @@ function computeTimeFeasibility(
     nextGapMinutes = nextNeighbor.sortKeyMinutes - newSortKeyMinutes;
     nextTravelMinutes = estimateTravelMinutes(nextNeighbor.distanceKm);
     // This job has to finish (its own duration) before the drive can start.
-    nextConflict = nextGapMinutes < newJobDurationMinutes + nextTravelMinutes;
+    nextConflict = nextGapMinutes < newJobDurationMinutes + nextTravelMinutes + bufferMinutes;
   }
 
   return {
@@ -990,13 +1018,17 @@ function computeGapWindow(
   // The previous neighbor's OWN duration — how long they occupy before
   // you're free to leave and travel to this job. Distinct from
   // newJobDurationMinutes below, which is this job's own duration.
+  // bufferMinutes only applies against a REAL job (previousBound/nextBound
+  // not null) — it's extra room between two jobs for overruns, not extra
+  // room against the start/end of the working day itself.
   const earliestStartMinutes =
     previousBound === null
       ? preferences.workdayStartMinutes +
         (previousNeighbor.isHome ? estimateTravelMinutes(previousNeighbor.distanceKm) : 0)
       : previousBound +
         previousNeighbor.durationMinutes +
-        estimateTravelMinutes(previousNeighbor.distanceKm);
+        estimateTravelMinutes(previousNeighbor.distanceKm) +
+        preferences.bufferMinutes;
 
   const latestStartMinutes =
     nextBound === null
@@ -1005,7 +1037,8 @@ function computeGapWindow(
         (nextNeighbor.isHome ? estimateTravelMinutes(nextNeighbor.distanceKm) : 0)
       : nextBound -
         estimateTravelMinutes(nextNeighbor.distanceKm) -
-        newJobDurationMinutes;
+        newJobDurationMinutes -
+        preferences.bufferMinutes;
 
   return { earliestStartMinutes, latestStartMinutes };
 }
@@ -1330,13 +1363,29 @@ function analyzeDayGaps(
  *
  * Returns null only if there are no candidate days at all.
  *
- * `now`, when given, is "the user's current wall-clock position" — the date
- * their today's date falls on, and the current time as minutes-since-
- * midnight, both already resolved to their profile timezone by the caller.
- * Deliberately not a `Date()` read in here: keeps this function pure and
- * its tests deterministic. Only `now.todayDate` among `candidateDates` is
- * ever affected, and only to push an already-elapsed part of TODAY out of
- * feasibility — every other candidate day is untouched.
+ * `now` is "the user's current wall-clock position" — the date their
+ * today's date falls on, and the current time as minutes-since-midnight,
+ * both already resolved to their profile timezone by the caller, or `null`
+ * when there genuinely is none to give (deterministic test scenarios that
+ * don't care about today-specific behavior). Deliberately not a `Date()`
+ * read in here: keeps this function pure. Only `now.todayDate` among
+ * `candidateDates` is ever affected, and only to push an already-elapsed
+ * part of TODAY out of feasibility — every other candidate day is
+ * untouched. Required (not defaulted) so a caller can't silently forget
+ * it — exactly the gap that let one of actions.ts's three call sites miss
+ * it during development.
+ *
+ * `urgency` changes which day wins when more than one fits:
+ * - "normal": unchanged — today's original distance-first ranking.
+ * - "urgent": earliest date wins outright (today's soft "prefer sooner"
+ *   distance bias is replaced by a hard chronological sort), distance only
+ *   breaks a tie between two equally-soon days. Does NOT suppress the
+ *   existing far-day distance warning — that's a separate check in
+ *   pickSuggestion/the caller, untouched here.
+ * - "whenever": same distance-first ranking as normal, with a small bonus
+ *   for a tighter-fitting gap (useful for filling an otherwise-awkward
+ *   slot) — weighted low enough to only ever break a near-tie, never
+ *   override a real distance difference.
  */
 export function suggestBestDay(
   newJob: Coordinates,
@@ -1346,7 +1395,8 @@ export function suggestBestDay(
   existingJobs: ExistingJob[],
   preferences: SchedulingPreferences = DEFAULT_SCHEDULING_PREFERENCES,
   newJobDurationMinutesRaw: number | null = null,
-  now: { todayDate: string; nowMinutes: number } | null = null
+  now: { todayDate: string; nowMinutes: number } | null,
+  urgency: JobUrgency
 ): BestDayResult | null {
   if (candidateDates.length === 0) {
     return null;
@@ -1388,6 +1438,7 @@ export function suggestBestDay(
       maxTravelRangeKm: preferences.maxTravelRangeKm,
       workdayStartMinutes: effectiveStartMinutes,
       workdayEndMinutes: dayHours.endMinutes,
+      bufferMinutes: preferences.bufferMinutes,
     };
 
     const stops = jobsByDate.get(date) ?? [];
@@ -1601,7 +1652,8 @@ export function suggestBestDay(
             newJobSortKey as number,
             previousNeighbor,
             nextNeighbor,
-            newJobDurationMinutes
+            newJobDurationMinutes,
+            dayWindow.bufferMinutes
           )
         : null;
 
@@ -1654,12 +1706,37 @@ export function suggestBestDay(
   // so a day 3-4 weeks out needs a genuine reason (real clustering, not a
   // rounding difference) to outrank one next week.
   const earliestCandidateDate = candidateDates[0];
-  function rankingScore(day: DayRoute): number {
+  // Named distanceRankingScore (was rankingScore) now that urgency gives
+  // "normal" two siblings below — this one is exactly the original
+  // formula, unchanged, so "normal" (and every existing caller, which all
+  // now explicitly pass "normal") ranks identically to before urgency
+  // existed.
+  function distanceRankingScore(day: DayRoute): number {
     const relevancePenaltyKm = day.nearestExistingJobDistanceKm ?? CLUSTER_DISTANCE_KM;
     const soonPenaltyKm =
       SOON_PREFERENCE_KM_PER_DAY * daysBetween(earliestCandidateDate, day.date);
     return (
       day.addedDistanceKm + PROXIMITY_TO_EXISTING_JOBS_WEIGHT * relevancePenaltyKm + soonPenaltyKm
+    );
+  }
+
+  // How much room the day's chosen gap leaves beyond what's strictly
+  // needed — only meaningful once a day actually fits. Used only by
+  // "whenever" below, as a tie-breaking nudge toward using up an otherwise
+  // awkward tight gap rather than leaving a wide-open day idle.
+  function gapWindowMinutesFor(day: DayRoute): number {
+    const option = day.timeOption;
+    if (!option || !option.fits) return 0;
+    return Math.max(0, option.latestStartMinutes - option.earliestStartMinutes);
+  }
+
+  // Same distance-first score as normal — gap size only ever nudges a
+  // near-tie (see WHENEVER_GAP_FILL_WEIGHT_KM_PER_MINUTE), never lets a
+  // tighter gap outrank a genuinely closer day.
+  function wheneverRankingScore(day: DayRoute): number {
+    return (
+      distanceRankingScore(day) +
+      WHENEVER_GAP_FILL_WEIGHT_KM_PER_MINUTE * gapWindowMinutesFor(day)
     );
   }
 
@@ -1686,7 +1763,21 @@ export function suggestBestDay(
     if (aBlocked !== bBlocked) {
       return aBlocked ? 1 : -1;
     }
-    return rankingScore(a) - rankingScore(b);
+    if (urgency === "urgent") {
+      // Hard chronological order — the earliest date that still fits wins
+      // outright, replacing the soft "prefer sooner" distance bias that
+      // the normal/whenever ranking uses. Distance only breaks a tie
+      // between two equally-soon days (date strings are "YYYY-MM-DD", so
+      // this is never actually a tie in practice, but defensive).
+      if (a.date !== b.date) {
+        return a.date < b.date ? -1 : 1;
+      }
+      return distanceRankingScore(a) - distanceRankingScore(b);
+    }
+    if (urgency === "whenever") {
+      return wheneverRankingScore(a) - wheneverRankingScore(b);
+    }
+    return distanceRankingScore(a) - distanceRankingScore(b);
   });
 
   const suggestion = pickSuggestion(allDays, preferences, isUnsuitableToSuggest(allDays[0]));

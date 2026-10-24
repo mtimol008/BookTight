@@ -29,6 +29,7 @@ export function BusinessRulesEditForm({ profile }: { profile: ProfileRecord }) {
   const [maxTravelRange, setMaxTravelRange] = useState(
     distanceKmToUnit(profile.max_travel_range_km, initialDistanceUnit).toFixed(1)
   );
+  const [bufferMinutes, setBufferMinutes] = useState(String(profile.buffer_minutes ?? 0));
   const [clientError, setClientError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -122,6 +123,28 @@ export function BusinessRulesEditForm({ profile }: { profile: ProfileRecord }) {
         <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
           Leave blank for no cap. A day already at this many jobs won&rsquo;t be
           suggested, and picking it manually warns first.
+        </p>
+      </div>
+
+      <div className="field">
+        <label className="field-label" htmlFor="business-rules-buffer-minutes">
+          Buffer between jobs (minutes)
+        </label>
+        <input
+          id="business-rules-buffer-minutes"
+          className="input"
+          type="number"
+          name="bufferMinutes"
+          min={0}
+          max={120}
+          step="1"
+          value={bufferMinutes}
+          onChange={(e) => setBufferMinutes(e.target.value)}
+        />
+        <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
+          Extra time left between two jobs on top of the drive itself, for
+          overruns. 0 means off — a suggested time can follow immediately
+          after the drive, same as before this setting existed.
         </p>
       </div>
 

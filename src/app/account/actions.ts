@@ -120,6 +120,7 @@ export async function updateBusinessRules(
       distance_unit: validated.value.distanceUnit,
       max_travel_range_km: validated.value.maxTravelRangeKm,
       max_jobs_per_day: validated.value.maxJobsPerDay,
+      buffer_minutes: validated.value.bufferMinutes,
     })
     .eq("id", user.id);
 

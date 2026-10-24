@@ -24,6 +24,7 @@ export interface BusinessRulesInput {
   distanceUnit: DistanceUnit;
   maxTravelRangeKm: number;
   maxJobsPerDay: number | null;
+  bufferMinutes: number;
 }
 
 function distanceUnitFromRaw(raw: string | null): DistanceUnit {
@@ -135,12 +136,25 @@ export function validateBusinessRules(
     }
   }
 
+  // Absent (e.g. onboarding, which doesn't render this field) means off —
+  // 0 is a genuine no-op in the scheduling engine, not a placeholder.
+  const bufferMinutesRaw = formData.get("bufferMinutes")?.toString().trim() ?? "";
+  let bufferMinutes = 0;
+  if (bufferMinutesRaw) {
+    bufferMinutes = Number(bufferMinutesRaw);
+    // Mirrors the DB check constraint (0-120).
+    if (!Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 120) {
+      return { error: "Buffer between jobs must be a whole number of minutes, 0 to 120." };
+    }
+  }
+
   return {
     value: {
       workingHours,
       distanceUnit,
       maxTravelRangeKm,
       maxJobsPerDay,
+      bufferMinutes,
     },
   };
 }
