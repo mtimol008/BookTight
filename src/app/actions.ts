@@ -39,7 +39,9 @@ import {
 import { formatDistance, type DistanceUnit } from "@/lib/format";
 import {
   getCurrentWeekRange,
+  getNowMinutesInTimezone,
   getTodayDateString,
+  getTodayDateStringInTimezone,
   getWeekDates,
   getWeekRange,
 } from "@/lib/week";
@@ -256,8 +258,10 @@ function buildTimeSuggestion(
  *   happen on the day, say so — previously named slots got no feasibility
  *   check at all, so an "Afternoon" job could be dropped onto a day whose
  *   afternoon was completely full.
- * - A specific time: nothing; the travel-time conflict warning on
- *   DayRoute.timeFeasibility already covers it.
+ * - A specific time: nothing, UNLESS the exact minute requested for today
+ *   has already gone by — the travel-time conflict warning on
+ *   DayRoute.timeFeasibility covers neighbor conflicts, but has no notion
+ *   of "now" at all, so an already-past time needs its own check here.
  */
 function buildTimeVerdict(
   requestedTime: RequestedTime,
@@ -298,6 +302,18 @@ function buildTimeVerdict(
       return null;
     }
     const slotName = namedSlotLabel(requestedTime.type);
+    // A true, honest "too late today" — within working hours, but the
+    // slot's own window has already gone by. Distinct from both messages
+    // below: it's neither a working-hours mismatch nor a booked-up day.
+    if (option.blockedReason === "already-passed-today") {
+      return {
+        fits: false,
+        slot: null,
+        specificTime: null,
+        label: null,
+        reasoning: `${slotName} has already passed today. Try a different time, or book it anyway.`,
+      };
+    }
     // blockedSlots only ever lists slots that real fixed-time bookings
     // occupy (see blockedSlotsFor in scheduling.ts) — a flexible job can't
     // populate it, since it imposes no clock bound of its own. So an empty
@@ -322,7 +338,31 @@ function buildTimeVerdict(
     };
   }
 
+  // Advisory, not a hard block — the normal Book-it-anyway override still
+  // applies. A pure "has this clock time gone by" check, independent of
+  // the neighbor-conflict warning timeFeasibility already covers.
+  if (requestedTime.type === "specific" && day.timeOption?.blockedReason === "already-passed-today") {
+    return {
+      fits: false,
+      slot: null,
+      specificTime: null,
+      label: null,
+      reasoning: "That time has already passed today. Try a different time, or book it anyway.",
+    };
+  }
+
   return null;
+}
+
+/** The user's own wall-clock position right now, resolved via their stored
+ *  profile timezone rather than the server's runtime clock (Vercel's Node
+ *  processes run in UTC) — the difference that matters during BST, where
+ *  the server's own "today" can lag up to an hour behind the user's. */
+function nowForScheduling(profile: ProfileRecord): { todayDate: string; nowMinutes: number } {
+  return {
+    todayDate: getTodayDateStringInTimezone(profile.timezone),
+    nowMinutes: getNowMinutesInTimezone(profile.timezone),
+  };
 }
 
 export async function getSchedulingSuggestion(
@@ -352,12 +392,12 @@ export async function getSchedulingSuggestion(
   const { startDate: currentMonday } = getCurrentWeekRange();
   const { endDate } = getWeekRange(currentMonday, SUGGESTION_LOOKAHEAD_WEEKS);
   const weekJobs = await getJobsForWeek(currentMonday, endDate);
+  const now = nowForScheduling(profile);
   // Exclude days that have already passed — the range always starts on
   // this week's Monday, but a day before today isn't actually bookable
-  // anymore.
-  const today = getTodayDateString();
+  // anymore. The user's own today, not the server's (see nowForScheduling).
   const candidateDates = getWeekDates(currentMonday, SUGGESTION_LOOKAHEAD_WEEKS).filter(
-    (date) => date >= today
+    (date) => date >= now.todayDate
   );
 
   const existingJobs: ExistingJob[] = weekJobs
@@ -386,7 +426,8 @@ export async function getSchedulingSuggestion(
     candidateDates,
     existingJobs,
     preferences,
-    durationMinutes
+    durationMinutes,
+    now
   );
 
   if (!result) {
@@ -524,7 +565,8 @@ export async function getDayTimeSuggestion(
     [date],
     existingJobs,
     schedulingPreferencesFromProfile(profile),
-    durationMinutes
+    durationMinutes,
+    nowForScheduling(profile)
   );
 
   if (!result) {
@@ -614,7 +656,12 @@ export interface ConfirmJobInput {
 export async function confirmAndSaveJob(
   input: ConfirmJobInput
 ): Promise<AhaMomentPayload | null> {
-  if (input.date < getTodayDateString()) {
+  // The user's own today, not the server's — see nowForScheduling. Falls
+  // back to the server-local date only in the unexpected case of no
+  // profile (RLS would already have refused the insert below regardless).
+  const profile = await getCurrentProfile();
+  const today = profile ? getTodayDateStringInTimezone(profile.timezone) : getTodayDateString();
+  if (input.date < today) {
     throw new Error("Can't book a job on a date that's already passed.");
   }
 
@@ -667,8 +714,11 @@ export async function updateExistingJob(
   // Only reject a date that's actually changing to a past one — a job
   // already sitting on an earlier date this week (not yet reviewed) still
   // needs to be editable without moving it, which is exactly the "keep
-  // current date" case the day-suggestion panel already supports.
-  if (input.date !== current?.date && input.date < getTodayDateString()) {
+  // current date" case the day-suggestion panel already supports. The
+  // user's own today, not the server's — see nowForScheduling.
+  const profile = await getCurrentProfile();
+  const today = profile ? getTodayDateStringInTimezone(profile.timezone) : getTodayDateString();
+  if (input.date !== current?.date && input.date < today) {
     throw new Error("Can't move a job to a date that's already passed.");
   }
 

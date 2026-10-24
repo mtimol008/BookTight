@@ -14,6 +14,7 @@ import {
   type NamedTimeSlot,
   type SchedulingPreferences,
 } from "../src/lib/scheduling";
+import { getNowMinutesInTimezone, getTodayDateStringInTimezone } from "../src/lib/week";
 
 function withPrefs(overrides: Partial<SchedulingPreferences>): SchedulingPreferences {
   return { ...DEFAULT_SCHEDULING_PREFERENCES, ...overrides };
@@ -66,6 +67,15 @@ function expectTrue(label: string, condition: boolean): void {
   }
 }
 
+function expectEqual<T>(label: string, actual: T, expected: T): void {
+  if (actual === expected) {
+    console.log(`PASS: ${label} -> ${String(expected)} as expected.`);
+  } else {
+    console.error(`FAIL: ${label} -> expected ${String(expected)}, got ${String(actual)}`);
+    process.exit(1);
+  }
+}
+
 const NONE: JobTime = { type: "none" };
 
 // --- Scenario 1: recommended ---------------------------------------------
@@ -81,7 +91,7 @@ const NONE: JobTime = { type: "none" };
   const candidateDates = ["2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13"];
   const newJob = { latitude: 30.415, longitude: -97.715 };
 
-  const result = suggestBestDay(newJob, NONE, home, candidateDates, existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  candidateDates, existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 1 expected a result, got null");
     process.exit(1);
@@ -99,7 +109,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const candidateDates = ["2026-08-10", "2026-08-11"];
 
-  const result = suggestBestDay(newJob, NONE, home, candidateDates, existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  candidateDates, existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 2 expected a result, got null");
     process.exit(1);
@@ -117,7 +127,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const candidateDates = ["2026-08-10", "2026-08-11"];
 
-  const result = suggestBestDay(newJob, NONE, home, candidateDates, existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  candidateDates, existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 3 expected a result, got null");
     process.exit(1);
@@ -141,7 +151,7 @@ const NONE: JobTime = { type: "none" };
     { id: "C", date: "2026-08-10", latitude: 29.97, longitude: -97.02, time: { type: "specific", specificTime: "12:00" }, durationMinutes: null, manualPosition: null },
   ];
 
-  const result = suggestBestDay(home, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(home,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 4 expected a result, got null");
     process.exit(1);
@@ -166,8 +176,8 @@ const NONE: JobTime = { type: "none" };
   ];
   const skeletonOnly = existingJobsWithF.filter((j) => j.id !== "F");
 
-  const withF = suggestBestDay(home, NONE, home, ["2026-08-10"], existingJobsWithF);
-  const skeleton = suggestBestDay(home, NONE, home, ["2026-08-10"], skeletonOnly);
+  const withF = suggestBestDay(home,  NONE,  home,  ["2026-08-10"], existingJobsWithF, undefined, undefined, null);
+  const skeleton = suggestBestDay(home,  NONE,  home,  ["2026-08-10"], skeletonOnly, undefined, undefined, null);
   if (!withF || !skeleton) {
     console.error("FAIL: scenario 5 expected results, got null");
     process.exit(1);
@@ -195,7 +205,7 @@ const NONE: JobTime = { type: "none" };
     { id: "afternoon-job", date: "2026-08-10", ...jobAfternoon, time: { type: "specific", specificTime: "16:00" }, durationMinutes: null, manualPosition: null },
   ];
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 6 expected a result, got null");
     process.exit(1);
@@ -220,8 +230,8 @@ const NONE: JobTime = { type: "none" };
     { id: "E", date: "2026-08-10", latitude: 30.24, longitude: -97.0, time: { type: "specific", specificTime: "10:00" }, durationMinutes: null, manualPosition: null },
   ];
 
-  const tight = suggestBestDay(home, { type: "specific", specificTime: "10:15" }, home, ["2026-08-10"], existingJobs);
-  const comfortable = suggestBestDay(home, { type: "specific", specificTime: "12:15" }, home, ["2026-08-10"], existingJobs);
+  const tight = suggestBestDay(home,  { type: "specific", specificTime: "10:15" },  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
+  const comfortable = suggestBestDay(home,  { type: "specific", specificTime: "12:15" },  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!tight || !comfortable) {
     console.error("FAIL: scenario 7 expected results, got null");
     process.exit(1);
@@ -249,7 +259,7 @@ const NONE: JobTime = { type: "none" };
     { id: "C", date: "2026-08-10", latitude: 29.97, longitude: -97.02, time: morning, durationMinutes: null, manualPosition: null },
   ];
 
-  const result = suggestBestDay(home, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(home,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 8 expected a result, got null");
     process.exit(1);
@@ -291,7 +301,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const candidateDates = ["2026-08-03", "2026-08-06"];
 
-  const result = suggestBestDay(newJob, NONE, home, candidateDates, existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  candidateDates, existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 9 expected a result, got null");
     process.exit(1);
@@ -327,7 +337,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const newJob = { latitude: 30.5, longitude: -93.75 };
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 10 expected a result, got null");
     process.exit(1);
@@ -363,7 +373,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const newJob = { latitude: 30.5, longitude: -96.4 };
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 11 expected a result, got null");
     process.exit(1);
@@ -392,7 +402,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const newJob = { latitude: 30.5, longitude: -96.25 };
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 12 expected a result, got null");
     process.exit(1);
@@ -420,7 +430,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const newJob = { latitude: 30.5, longitude: -96.25 };
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 13 expected a result, got null");
     process.exit(1);
@@ -450,7 +460,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const newJob = { latitude: 30.205, longitude: -97.005 };
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 14 expected a result, got null");
     process.exit(1);
@@ -492,7 +502,7 @@ const NONE: JobTime = { type: "none" };
   // Sits just past the morning job, nowhere near the afternoon one.
   const newJob = { latitude: 30.12, longitude: -97.0 };
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 15 expected a result, got null");
     process.exit(1);
@@ -522,7 +532,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const newJob = { latitude: 30.5, longitude: -93.75 };
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 16 expected a result, got null");
     process.exit(1);
@@ -554,7 +564,7 @@ const NONE: JobTime = { type: "none" };
     { id: "tue", date: "2026-08-11", latitude: 30.25, longitude: -96.9, time: { type: "specific", specificTime: "13:00" }, durationMinutes: null, manualPosition: null },
   ];
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10", "2026-08-11"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10", "2026-08-11"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 17 expected a result, got null");
     process.exit(1);
@@ -647,12 +657,10 @@ const NONE: JobTime = { type: "none" };
   ];
 
   const asAfternoon = suggestBestDay(
-    newJob, { type: "afternoon" }, home, ["2026-08-10"], existingJobs
-  );
+    newJob,  { type: "afternoon" },  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   const asMorning = suggestBestDay(
-    newJob, { type: "morning" }, home, ["2026-08-10"], existingJobs
-  );
-  const asFlexible = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+    newJob,  { type: "morning" },  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
+  const asFlexible = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!asAfternoon || !asMorning || !asFlexible) {
     console.error("FAIL: scenario 19 expected results, got null");
     process.exit(1);
@@ -689,12 +697,10 @@ const NONE: JobTime = { type: "none" };
   // drive. This is the reported symptom — a job landing on a day with
   // nine jobs already on it because only distance was ever consulted.
   const withFreeDay = suggestBestDay(
-    newJob,
-    { type: "afternoon" },
-    home,
-    ["2026-08-10", "2026-08-11"],
-    existingJobs
-  );
+    newJob, 
+    { type: "afternoon" }, 
+    home, 
+    ["2026-08-10", "2026-08-11"], existingJobs, undefined, undefined, null);
   if (!withFreeDay) {
     console.error("FAIL: scenario 19 expected a result, got null");
     process.exit(1);
@@ -725,15 +731,13 @@ const NONE: JobTime = { type: "none" };
   const home = { latitude: 30.0, longitude: -97.0 };
   const newJob = { latitude: 30.1, longitude: -97.0 };
 
-  const withDefault = suggestBestDay(newJob, NONE, home, ["2026-08-10"], []);
+  const withDefault = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], [], undefined, undefined, null);
   const withCustom = suggestBestDay(
-    newJob,
-    NONE,
-    home,
-    ["2026-08-10"],
-    [],
-    withPrefs({ maxTravelRangeKm: 10 })
-  );
+    newJob, 
+    NONE, 
+    home, 
+    ["2026-08-10"], 
+    [], withPrefs({ maxTravelRangeKm: 10 }), undefined, null);
   if (!withDefault || !withCustom) {
     console.error("FAIL: scenario 20 expected results, got null");
     process.exit(1);
@@ -753,15 +757,13 @@ const NONE: JobTime = { type: "none" };
   const home = { latitude: 30.0, longitude: -97.0 };
   const newJob = { latitude: 30.9, longitude: -97.0 };
 
-  const withDefault = suggestBestDay(newJob, NONE, home, ["2026-08-10"], []);
+  const withDefault = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], [], undefined, undefined, null);
   const withCustom = suggestBestDay(
-    newJob,
-    NONE,
-    home,
-    ["2026-08-10"],
-    [],
-    withUniformWorkingHours(10 * 60, 14 * 60)
-  );
+    newJob, 
+    NONE, 
+    home, 
+    ["2026-08-10"], 
+    [], withUniformWorkingHours(10 * 60, 14 * 60), undefined, null);
   if (!withDefault || !withCustom) {
     console.error("FAIL: scenario 21 expected results, got null");
     process.exit(1);
@@ -797,7 +799,7 @@ const NONE: JobTime = { type: "none" };
   ];
   const candidateDates = ["2026-08-10", "2026-08-11"];
 
-  const withDefault = suggestBestDay(newJob, NONE, home, candidateDates, existingJobs);
+  const withDefault = suggestBestDay(newJob,  NONE,  home,  candidateDates, existingJobs, undefined, undefined, null);
   if (!withDefault) {
     console.error("FAIL: scenario 22 expected a result, got null");
     process.exit(1);
@@ -809,13 +811,11 @@ const NONE: JobTime = { type: "none" };
   expectTrue("scenario 22 Day A wins by default", withDefault.suggestion.day.date === "2026-08-10");
 
   const withCap = suggestBestDay(
-    newJob,
-    NONE,
-    home,
-    candidateDates,
-    existingJobs,
-    withPrefs({ maxJobsPerDay: dayA.jobCount })
-  );
+    newJob, 
+    NONE, 
+    home, 
+    candidateDates, 
+    existingJobs, withPrefs({ maxJobsPerDay: dayA.jobCount }), undefined, null);
   if (!withCap) {
     console.error("FAIL: scenario 22 expected a result with the cap, got null");
     process.exit(1);
@@ -842,7 +842,7 @@ const NONE: JobTime = { type: "none" };
   const home = { latitude: 30.0, longitude: -97.0 };
   const closeJob = { latitude: 30.045, longitude: -97.0 };
 
-  const result = suggestBestDay(closeJob, NONE, home, ["2026-08-10"], []);
+  const result = suggestBestDay(closeJob,  NONE,  home,  ["2026-08-10"], [], undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 23 expected a result, got null");
     process.exit(1);
@@ -863,7 +863,7 @@ const NONE: JobTime = { type: "none" };
   const home = { latitude: 30.0, longitude: -97.0 };
   const farJob = { latitude: 30.0, longitude: -96.4295 };
 
-  const result = suggestBestDay(farJob, NONE, home, ["2026-08-10"], []);
+  const result = suggestBestDay(farJob,  NONE,  home,  ["2026-08-10"], [], undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 24 expected a result, got null");
     process.exit(1);
@@ -901,13 +901,11 @@ const NONE: JobTime = { type: "none" };
   // A generous max travel range makes this job read as "close" (closeness
   // near 1) -> the bias favors the day-start edge gap, before A.
   const closePreference = suggestBestDay(
-    newJob, NONE, home, ["2026-08-10"], existingJobs, withPrefs({ maxTravelRangeKm: 60 })
-  );
+    newJob,  NONE,  home,  ["2026-08-10"],  existingJobs, withPrefs({ maxTravelRangeKm: 60 }), undefined, null);
   // A tighter range makes the exact same job read as "far" (closeness well
   // under 0.5) -> the bias favors the mid-day gap, between A and B.
   const farPreference = suggestBestDay(
-    newJob, NONE, home, ["2026-08-10"], existingJobs, withPrefs({ maxTravelRangeKm: 30 })
-  );
+    newJob,  NONE,  home,  ["2026-08-10"],  existingJobs, withPrefs({ maxTravelRangeKm: 30 }), undefined, null);
   if (!closePreference || !farPreference) {
     console.error("FAIL: scenario 25 expected results, got null");
     process.exit(1);
@@ -937,8 +935,8 @@ const NONE: JobTime = { type: "none" };
   const farJob = { latitude: 30.0, longitude: -96.4295 };
   const afternoon: JobTime = { type: "afternoon" };
 
-  const closeResult = suggestBestDay(closeJob, afternoon, home, ["2026-08-10"], []);
-  const farResult = suggestBestDay(farJob, afternoon, home, ["2026-08-10"], []);
+  const closeResult = suggestBestDay(closeJob,  afternoon,  home,  ["2026-08-10"], [], undefined, undefined, null);
+  const farResult = suggestBestDay(farJob,  afternoon,  home,  ["2026-08-10"], [], undefined, undefined, null);
   if (!closeResult || !farResult) {
     console.error("FAIL: scenario 26 expected results, got null");
     process.exit(1);
@@ -971,8 +969,8 @@ const NONE: JobTime = { type: "none" };
   const farJob = { latitude: 30.0, longitude: -96.4295 };
   const tenAm: JobTime = { type: "specific", specificTime: "10:00" };
 
-  const closeResult = suggestBestDay(closeJob, tenAm, home, ["2026-08-10"], []);
-  const farResult = suggestBestDay(farJob, tenAm, home, ["2026-08-10"], []);
+  const closeResult = suggestBestDay(closeJob,  tenAm,  home,  ["2026-08-10"], [], undefined, undefined, null);
+  const farResult = suggestBestDay(farJob,  tenAm,  home,  ["2026-08-10"], [], undefined, undefined, null);
   if (!closeResult || !farResult) {
     console.error("FAIL: scenario 27 expected results, got null");
     process.exit(1);
@@ -1007,7 +1005,7 @@ const NONE: JobTime = { type: "none" };
       { id: "E", date: "2026-08-10", ...E, time: { type: "specific", specificTime: "09:00" }, durationMinutes: eDurationMinutes, manualPosition: null },
       { id: "F", date: "2026-08-10", ...F, time: { type: "specific", specificTime: "11:10" }, durationMinutes: null, manualPosition: null },
     ];
-    const result = suggestBestDay(candidate, NONE, home, ["2026-08-10"], existingJobs, prefs);
+    const result = suggestBestDay(candidate,  NONE,  home,  ["2026-08-10"],  existingJobs, prefs, undefined, null);
     const window = result!.allDays[0].timeOption!;
     // Guard the premise: confirms it's really the isolated E-F gap being
     // evaluated in both cases, not some other gap rescuing the candidate.
@@ -1043,7 +1041,7 @@ const NONE: JobTime = { type: "none" };
     const existingJobs: ExistingJob[] = [
       { id: "E", date: "2026-08-10", latitude: 30.24, longitude: -97.0, time: { type: "specific", specificTime: "10:00" }, durationMinutes, manualPosition: null },
     ];
-    const result = suggestBestDay(home, requestedTime, home, ["2026-08-10"], existingJobs);
+    const result = suggestBestDay(home,  requestedTime,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
     return result!.allDays[0].timeFeasibility?.previousConflict ?? false;
   }
 
@@ -1104,7 +1102,7 @@ const NONE: JobTime = { type: "none" };
     { id: "F2", date: "2026-08-10", ...F2, time: NONE, durationMinutes: null, manualPosition: 0 },
   ];
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 31 expected a result, got null");
     process.exit(1);
@@ -1177,7 +1175,7 @@ const NONE: JobTime = { type: "none" };
     { id: "talbot", date: "2026-08-10", ...talbot, time: morning, durationMinutes: null, manualPosition: null },
   ];
 
-  const result = suggestBestDay(newJob, NONE, home, ["2026-08-10"], existingJobs);
+  const result = suggestBestDay(newJob,  NONE,  home,  ["2026-08-10"], existingJobs, undefined, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 33 expected a result, got null");
     process.exit(1);
@@ -1228,13 +1226,13 @@ const NONE: JobTime = { type: "none" };
   const newJob = { latitude: 30.415, longitude: -97.715 };
   const candidateDates = ["2026-08-10", "2026-08-11"];
 
-  const noExistingJobsResult = suggestBestDay(newJob, NONE, home, candidateDates, []);
+  const noExistingJobsResult = suggestBestDay(newJob,  NONE,  home,  candidateDates, [], undefined, undefined, null);
   expectTrue(
     "an entirely empty week still returns a result for every day",
     noExistingJobsResult !== null && noExistingJobsResult.allDays.length === candidateDates.length
   );
 
-  const noCandidatesResult = suggestBestDay(newJob, NONE, home, [], []);
+  const noCandidatesResult = suggestBestDay(newJob,  NONE,  home,  [], [], undefined, undefined, null);
   expectTrue("zero candidate dates correctly returns null", noCandidatesResult === null);
 }
 
@@ -1262,7 +1260,7 @@ const NONE: JobTime = { type: "none" };
     },
   };
 
-  const result = suggestBestDay(newJob, NONE, home, candidateDates, existingJobs, mondayOffPrefs);
+  const result = suggestBestDay(newJob,  NONE,  home,  candidateDates,  existingJobs, mondayOffPrefs, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 34 expected a result, got null");
     process.exit(1);
@@ -1297,7 +1295,7 @@ const NONE: JobTime = { type: "none" };
     },
   };
 
-  const result = suggestBestDay(newJob, NONE, home, candidateDates, [], satNarrowPrefs);
+  const result = suggestBestDay(newJob,  NONE,  home,  candidateDates,  [], satNarrowPrefs, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 35 expected a result, got null");
     process.exit(1);
@@ -1340,7 +1338,7 @@ const NONE: JobTime = { type: "none" };
     },
   };
 
-  const result = suggestBestDay(newJob, NONE, home, candidateDates, [], allDaysOffPrefs);
+  const result = suggestBestDay(newJob,  NONE,  home,  candidateDates,  [], allDaysOffPrefs, undefined, null);
   if (!result) {
     console.error("FAIL: scenario 36 expected a result, got null");
     process.exit(1);
@@ -1354,6 +1352,370 @@ const NONE: JobTime = { type: "none" };
   expectTrue(
     "scenario 36 both blocked days are still present, not hidden",
     result.allDays.length === 2 && result.allDays.every((d) => timeOptionOf(d).fits === false)
+  );
+}
+
+// --- Scenario 37: today's "now" floor — the reported bug itself ----------
+// Monday 2026-08-10 as "today", under the DEFAULT 8am-6pm working day.
+// Before this fix, requesting a job for today with no requested time
+// ("Flexible") always considered the whole configured working day, however
+// late it actually was when the request was made — which is exactly how
+// "Morning" got suggested at 6:57pm. The reference times are the ones
+// explicitly asked for: two where the floor doesn't matter yet (the
+// configured start is still later than "now"), three where it does.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.001, longitude: -97.0 };
+  const candidateDates = ["2026-08-10"];
+  const todayDate = "2026-08-10";
+
+  function suggestAt(nowMinutes: number) {
+    const result = suggestBestDay(
+      newJob, 
+      NONE, 
+      home, 
+      candidateDates, 
+      [], 
+      DEFAULT_SCHEDULING_PREFERENCES, 
+      null, { todayDate, nowMinutes });
+    if (!result) {
+      console.error("FAIL: scenario 37 expected a result, got null");
+      process.exit(1);
+    }
+    return result.allDays[0];
+  }
+
+  // 6:57am (417) -> floor is 7:30am (450), still earlier than the 8am
+  // configured start, so the floor is moot and the day opens as normal.
+  // Tolerance absorbs the real (sub-minute) travel time from home the gap
+  // search also factors in — not what this assertion is about.
+  expectClose(
+    "scenario 37 6:57am: floor is moot, day still opens at its configured 8am start",
+    timeOptionOf(suggestAt(6 * 60 + 57)).earliestStartMinutes,
+    8 * 60,
+    1
+  );
+
+  // 12:30pm (750) -> floor is 1:00pm (780, (750+30)=780 is already a
+  // multiple of 15 so the round-up is a no-op), later than 8am, so it
+  // becomes the effective start.
+  expectClose(
+    "scenario 37 12:30pm: floor becomes the effective start, 1:00pm",
+    timeOptionOf(suggestAt(12 * 60 + 30)).earliestStartMinutes,
+    13 * 60,
+    1
+  );
+
+  // 6:57pm (1137) -> floor is 7:30pm (1170), past the 6pm (1080) configured
+  // end entirely. This is the reported bug's exact scenario: the working
+  // day is already over, so nothing today can fit — not even "Evening" (the
+  // slot that genuinely was still open at that clock time), because the
+  // account's own hours end at 6pm regardless of the slot. Graceful, not a
+  // crash: still a valid (fits: false) result.
+  expectTrue(
+    "scenario 37 6:57pm: today is correctly unworkable once the floor passes the configured 6pm end",
+    timeOptionOf(suggestAt(18 * 60 + 57)).fits === false
+  );
+
+  // 8:55pm (1255) -> floor is 9:30pm (1290), same story, further past.
+  expectTrue(
+    "scenario 37 8:55pm: also unworkable",
+    timeOptionOf(suggestAt(20 * 60 + 55)).fits === false
+  );
+
+  // 11:50pm (1430) -> floor is 24:30 (1470) — past midnight entirely.
+  // Nothing should crash; it's just unworkable, same as any other floor
+  // past the end of the day.
+  expectTrue(
+    "scenario 37 11:50pm: floor rounds past midnight, still handled gracefully",
+    timeOptionOf(suggestAt(23 * 60 + 50)).fits === false
+  );
+}
+
+// --- Scenario 38: the floor's exact value, under hours wide enough to -----
+// actually observe it (rather than the whole day just being over) — and
+// working hours that end before the floor, the case asked for explicitly.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.001, longitude: -97.0 };
+  const candidateDates = ["2026-08-10"];
+  const todayDate = "2026-08-10";
+  const allDayHours = withUniformWorkingHours(0, 24 * 60);
+
+  function suggestAt(nowMinutes: number, prefs: SchedulingPreferences) {
+    const result = suggestBestDay(
+      newJob, 
+      NONE, 
+      home, 
+      candidateDates, 
+      [], 
+      prefs, 
+      null, { todayDate, nowMinutes });
+    if (!result) {
+      console.error("FAIL: scenario 38 expected a result, got null");
+      process.exit(1);
+    }
+    return result.allDays[0];
+  }
+
+  expectClose(
+    "scenario 38 6:57am under a full 24h working day: floor is exactly 7:30am",
+    timeOptionOf(suggestAt(6 * 60 + 57, allDayHours)).earliestStartMinutes,
+    7 * 60 + 30,
+    1
+  );
+  expectClose(
+    "scenario 38 12:30pm under a full 24h working day: floor is exactly 1:00pm",
+    timeOptionOf(suggestAt(12 * 60 + 30, allDayHours)).earliestStartMinutes,
+    13 * 60,
+    1
+  );
+  expectClose(
+    "scenario 38 6:57pm under a full 24h working day: floor is exactly 7:30pm",
+    timeOptionOf(suggestAt(18 * 60 + 57, allDayHours)).earliestStartMinutes,
+    19 * 60 + 30,
+    1
+  );
+  expectClose(
+    "scenario 38 8:55pm under a full 24h working day: floor is exactly 9:30pm",
+    timeOptionOf(suggestAt(20 * 60 + 55, allDayHours)).earliestStartMinutes,
+    21 * 60 + 30,
+    1
+  );
+
+  // Working hours that end before the floor: a day ending at 5pm, "now" is
+  // 6:57pm (floor 7:30pm) — the floor is already past the configured end,
+  // so the day is unworkable, same graceful (fits: false) outcome as
+  // scenario 37's 6pm case, just with an even earlier configured end.
+  const endsAtFivePrefs = withUniformWorkingHours(8 * 60, 17 * 60);
+  expectTrue(
+    "scenario 38 working hours ending at 5pm, floor at 7:30pm: unworkable, not a crash",
+    timeOptionOf(suggestAt(18 * 60 + 57, endsAtFivePrefs)).fits === false
+  );
+}
+
+// --- Scenario 39: an explicitly requested named slot that has already -----
+// passed today gets its own honest reason, distinct from both
+// outside-working-hours and a booked-up day — and a slot that's still
+// genuinely open (Evening, at the same 6:57pm) is unaffected. Working hours
+// extended to 8am-9pm so Evening has somewhere left to go; under the
+// account's real default (ending 6pm) the whole day would already be over,
+// as scenario 37 covers.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.001, longitude: -97.0 };
+  const candidateDates = ["2026-08-10"];
+  const prefs = withUniformWorkingHours(8 * 60, 21 * 60);
+  const now = { todayDate: "2026-08-10", nowMinutes: 18 * 60 + 57 };
+
+  const morningResult = suggestBestDay(
+    newJob, 
+    { type: "morning" }, 
+    home, 
+    candidateDates, 
+    [], 
+    prefs, 
+    null, now);
+  const eveningResult = suggestBestDay(
+    newJob, 
+    { type: "evening" }, 
+    home, 
+    candidateDates, 
+    [], 
+    prefs, 
+    null, now);
+  if (!morningResult || !eveningResult) {
+    console.error("FAIL: scenario 39 expected results, got null");
+    process.exit(1);
+  }
+
+  expectEqual(
+    "scenario 39 Morning at 6:57pm: already-passed-today, not outside-working-hours",
+    timeOptionOf(morningResult.allDays[0]).blockedReason,
+    "already-passed-today"
+  );
+  expectTrue(
+    "scenario 39 Evening at 6:57pm: still genuinely open, fits normally",
+    timeOptionOf(eveningResult.allDays[0]).fits === true
+  );
+}
+
+// --- Scenario 40: an exact requested time already behind today's floor ----
+// gets the same honest reason — advisory (the caller still offers Book it
+// anyway via the normal fits:false channel every other blocked reason
+// already uses), not a different, harder mechanism. A time still ahead of
+// the floor is unaffected.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.001, longitude: -97.0 };
+  const candidateDates = ["2026-08-10"];
+  const prefs = withUniformWorkingHours(8 * 60, 21 * 60);
+  const now = { todayDate: "2026-08-10", nowMinutes: 18 * 60 + 57 }; // floor: 7:30pm (1170)
+
+  const pastResult = suggestBestDay(
+    newJob, 
+    { type: "specific", specificTime: "14:00" },  // 840 < 1170
+    home, 
+    candidateDates, 
+    [], 
+    prefs, 
+    null, now);
+  const futureResult = suggestBestDay(
+    newJob, 
+    { type: "specific", specificTime: "20:00" },  // 1200 >= 1170
+    home, 
+    candidateDates, 
+    [], 
+    prefs, 
+    null, now);
+  if (!pastResult || !futureResult) {
+    console.error("FAIL: scenario 40 expected results, got null");
+    process.exit(1);
+  }
+
+  expectEqual(
+    "scenario 40 a 2:00pm request at 6:57pm: already-passed-today",
+    timeOptionOf(pastResult.allDays[0]).blockedReason,
+    "already-passed-today"
+  );
+  // A specific-time request that isn't blocked by anything gets no
+  // timeOption at all (unchanged pre-existing behavior — only a flexible
+  // or named-slot request's placement is scheduling.ts's to decide), so
+  // this reads the field directly rather than via the strict timeOptionOf.
+  expectTrue(
+    "scenario 40 an 8:00pm request at 6:57pm: still ahead of the floor, not blocked by it",
+    futureResult.allDays[0].timeOption?.blockedReason !== "already-passed-today"
+  );
+}
+
+// --- Scenario 41: an all-day request is never subject to the "now" floor --
+// It claims the whole day as a unit regardless of what time it currently
+// is, not a window within it — explicitly excluded in suggestBestDay.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.001, longitude: -97.0 };
+  const candidateDates = ["2026-08-10"];
+  const now = { todayDate: "2026-08-10", nowMinutes: 23 * 60 + 50 }; // 11:50pm
+
+  const result = suggestBestDay(
+    newJob, 
+    { type: "all_day" }, 
+    home, 
+    candidateDates, 
+    [], 
+    DEFAULT_SCHEDULING_PREFERENCES, 
+    null, now);
+  if (!result) {
+    console.error("FAIL: scenario 41 expected a result, got null");
+    process.exit(1);
+  }
+  expectTrue(
+    "scenario 41 an all-day request at 11:50pm is unaffected by the floor",
+    result.allDays[0].timeOption?.blockedReason !== "already-passed-today"
+  );
+}
+
+// --- Scenario 43: the floor applies to EVERY gap, not just the first ------
+// one. Caught live: a flexible job with an existing job already booked
+// early today used to ignore the floor entirely for the gap AFTER that
+// existing job, because computeGapWindow only grounds earliestStartMinutes
+// in the day's start when the previous neighbor is HOME — a gap after a
+// real job is bounded purely by when that job releases you, so a 9am
+// job's gap kept offering ~10am slots at 6:57pm. Wide hours (not the
+// account default) so the day doesn't just end before the floor either —
+// this scenario is specifically about the post-job gap being clamped, not
+// about the whole day already being over.
+{
+  const home = { latitude: 30.0, longitude: -97.0 };
+  const newJob = { latitude: 30.001, longitude: -97.0 };
+  const candidateDates = ["2026-08-10"];
+  const prefs = withUniformWorkingHours(0, 24 * 60);
+  const now = { todayDate: "2026-08-10", nowMinutes: 18 * 60 + 57 }; // floor: 7:30pm (1170)
+  const existingJobs: ExistingJob[] = [
+    {
+      id: "early-job",
+      date: "2026-08-10",
+      latitude: 30.001,
+      longitude: -97.0,
+      time: { type: "morning" }, // anchors around 9am
+      durationMinutes: 60,
+      manualPosition: null,
+    },
+  ];
+
+  const result = suggestBestDay(newJob,  NONE,  home,  candidateDates,  existingJobs,  prefs,  null, now);
+  if (!result) {
+    console.error("FAIL: scenario 43 expected a result, got null");
+    process.exit(1);
+  }
+  const option = timeOptionOf(result.allDays[0]);
+  // Whatever gap it picked, its earliest bound must not be the stale
+  // ~10am-ish (early job's release) the bug produced — it has to respect
+  // the 7:30pm floor, same as every other gap on this day.
+  expectTrue(
+    "scenario 43 the gap after an early existing job still respects today's floor, not just the job's own release time",
+    option.earliestStartMinutes >= 1170
+  );
+}
+
+// --- Scenario 42: the timezone helpers themselves (src/lib/week.ts) -------
+// getTodayDateStringInTimezone / getNowMinutesInTimezone are what feed
+// `now` into suggestBestDay in actions.ts. These read a wall clock in the
+// GIVEN timezone, not the server's own runtime timezone — the distinction
+// that matters during BST, when the server (Vercel, UTC) and a London user
+// disagree about what day it is for up to an hour.
+{
+  // 2026-10-23T23:30Z is 00:30 BST on the 24th in London — the server's own
+  // "today" (still the 23rd in UTC) is already wrong by a full calendar day.
+  const midnightBst = new Date("2026-10-23T23:30:00Z");
+  expectEqual(
+    "scenario 42 23:30 UTC on Oct 23 is already Oct 24 in London (BST)",
+    getTodayDateStringInTimezone("Europe/London", midnightBst),
+    "2026-10-24"
+  );
+  expectEqual(
+    "scenario 42 ...and reads as 00:30, not 23:30",
+    getNowMinutesInTimezone("Europe/London", midnightBst),
+    30
+  );
+
+  // UK clocks go back (BST -> GMT) at 01:00 UTC on the last Sunday of
+  // October — 2026-10-25. Just before that instant, London is still on
+  // BST (UTC+1); just after, it's back to GMT (UTC+0). Both land on the
+  // same calendar date and, by coincidence of the transition, the same
+  // apparent wall-clock reading — the point isn't the specific numbers,
+  // it's that Intl resolves each precise instant correctly with no crash
+  // or ambiguity, even inside the repeated hour.
+  const justBeforeChange = new Date("2026-10-25T00:30:00Z"); // 01:30 BST
+  const justAfterChange = new Date("2026-10-25T01:30:00Z"); // 01:30 GMT
+  expectEqual(
+    "scenario 42 just before the Oct 25 clock change: still Oct 25, 01:30",
+    getNowMinutesInTimezone("Europe/London", justBeforeChange),
+    90
+  );
+  expectEqual(
+    "scenario 42 just after the Oct 25 clock change: still Oct 25, 01:30",
+    getNowMinutesInTimezone("Europe/London", justAfterChange),
+    90
+  );
+  expectEqual(
+    "scenario 42 both sides of the clock-change hour agree on the date",
+    getTodayDateStringInTimezone("Europe/London", justBeforeChange),
+    getTodayDateStringInTimezone("Europe/London", justAfterChange)
+  );
+
+  // A missing or invalid timezone must never crash a suggestion — falls
+  // back to Europe/London rather than throwing.
+  const ref = new Date("2026-10-23T12:00:00Z");
+  expectEqual(
+    "scenario 42 an empty timezone falls back to Europe/London, doesn't throw",
+    getTodayDateStringInTimezone("", ref),
+    getTodayDateStringInTimezone("Europe/London", ref)
+  );
+  expectEqual(
+    "scenario 42 an invalid timezone falls back to Europe/London, doesn't throw",
+    getTodayDateStringInTimezone("Not/AZone", ref),
+    getTodayDateStringInTimezone("Europe/London", ref)
   );
 }
 

@@ -151,7 +151,9 @@ export interface UnreviewedSummary {
  * Always the OLDEST such day, so clearing one simply reveals the next and
  * a backlog works through itself one day at a time.
  */
-export async function getUnreviewedSummary(): Promise<UnreviewedSummary | null> {
+export async function getUnreviewedSummary(
+  today: string = getTodayDateString()
+): Promise<UnreviewedSummary | null> {
   const supabase = await createClient();
 
   const { data, error } = await withAuthRetry(() =>
@@ -159,7 +161,7 @@ export async function getUnreviewedSummary(): Promise<UnreviewedSummary | null> 
       .from("jobs")
       .select("date")
       .eq("status", "scheduled")
-      .lt("date", getTodayDateString())
+      .lt("date", today)
       .order("date", { ascending: true })
   );
 

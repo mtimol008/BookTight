@@ -14,7 +14,11 @@ import {
 } from "@/lib/jobs";
 import { getCurrentProfile } from "@/lib/profiles";
 import { planDayRoute, type ExistingJob, type TimeSlotType } from "@/lib/scheduling";
-import { getCurrentWeekRange } from "@/lib/week";
+import {
+  getCurrentWeekRange,
+  getTodayDateString,
+  getTodayDateStringInTimezone,
+} from "@/lib/week";
 
 /**
  * Groups the week's jobs by day and puts each day's jobs into the order
@@ -25,7 +29,8 @@ import { getCurrentWeekRange } from "@/lib/week";
  */
 function buildDayPlans(
   jobs: JobRecord[],
-  home: { latitude: number; longitude: number } | null
+  home: { latitude: number; longitude: number } | null,
+  today: string
 ): DayPlan[] {
   const byDate = new Map<string, JobRecord[]>();
   for (const job of jobs) {
@@ -49,7 +54,7 @@ function buildDayPlans(
         })),
         returnHomeKm: null,
         totalDistanceKm: null,
-        reviewStatus: getDayReviewStatus(date, dayJobs),
+        reviewStatus: getDayReviewStatus(date, dayJobs, today),
       };
     }
 
@@ -78,7 +83,7 @@ function buildDayPlans(
       })),
       returnHomeKm: route.returnHomeKm,
       totalDistanceKm: route.totalDistanceKm,
-      reviewStatus: getDayReviewStatus(date, dayJobs),
+      reviewStatus: getDayReviewStatus(date, dayJobs, today),
     };
   });
 }
@@ -97,10 +102,19 @@ function daysSince(isoTimestamp: string, referenceNow: Date = new Date()): numbe
 
 export default async function Home() {
   const { startDate, endDate } = getCurrentWeekRange();
-  const [jobs, profile, unreviewed, totalJobCount] = await Promise.all([
+  // Fetched ahead of the rest (rather than folded into the Promise.all
+  // below) because the user's own today — not the server's — depends on
+  // their stored timezone, and getUnreviewedSummary/buildDayPlans both
+  // need that same string. Costs one profile-fetch's worth of latency on
+  // the critical path instead of fully overlapping all four; worth it to
+  // get the day boundary right during BST (see nowForScheduling).
+  const profile = await getCurrentProfile();
+  const today = profile
+    ? getTodayDateStringInTimezone(profile.timezone)
+    : getTodayDateString();
+  const [jobs, unreviewed, totalJobCount] = await Promise.all([
     getJobsForWeek(startDate, endDate),
-    getCurrentProfile(),
-    getUnreviewedSummary(),
+    getUnreviewedSummary(today),
     getTotalJobCount(),
   ]);
 
@@ -121,7 +135,7 @@ export default async function Home() {
   const home = profile
     ? { latitude: profile.home_latitude, longitude: profile.home_longitude }
     : null;
-  const days = buildDayPlans(jobs, home);
+  const days = buildDayPlans(jobs, home, today);
 
   // Zero jobs EVER, not zero jobs this week — a light week is completely
   // normal for an account in active use and must never trigger this; only

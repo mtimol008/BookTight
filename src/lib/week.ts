@@ -47,6 +47,65 @@ export function getTodayDateString(referenceDate: Date = new Date()): string {
   return toISODate(referenceDate);
 }
 
+/** Falls back to when a stored timezone is missing, empty, or not a value
+ *  Intl recognizes — never lets a bad profile value crash a suggestion. */
+const FALLBACK_TIMEZONE = "Europe/London";
+
+/**
+ * Today's date as "YYYY-MM-DD", read on a wall clock in `timezone` — NOT the
+ * server's own runtime timezone (Vercel's Node processes run in UTC). This
+ * is the difference that matters during BST: at 2026-10-23T23:30Z the
+ * server's own "today" is still the 23rd, but it's already 00:30 on the
+ * 24th in London.
+ */
+export function getTodayDateStringInTimezone(
+  timezone: string,
+  referenceDate: Date = new Date()
+): string {
+  try {
+    // en-CA formats as YYYY-MM-DD directly, no reassembly needed.
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone || FALLBACK_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(referenceDate);
+  } catch {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: FALLBACK_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(referenceDate);
+  }
+}
+
+/** Minutes since local midnight, read on a wall clock in `timezone`. Same
+ *  server-vs-user-timezone reasoning as getTodayDateStringInTimezone. */
+export function getNowMinutesInTimezone(
+  timezone: string,
+  referenceDate: Date = new Date()
+): number {
+  const format = (tz: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(referenceDate);
+
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = format(timezone || FALLBACK_TIMEZONE);
+  } catch {
+    parts = format(FALLBACK_TIMEZONE);
+  }
+
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
+}
+
 export interface MonthRange {
   startDate: string; // "YYYY-MM-DD", 1st of the month
   endDate: string; // "YYYY-MM-DD", last day of the month

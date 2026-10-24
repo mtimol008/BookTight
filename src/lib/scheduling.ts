@@ -886,8 +886,20 @@ export interface DayTimeOption {
    *  case (blockedSlots/shortfallMinutes below already explain that one).
    *  "outside-working-hours": the requested named slot has zero overlap
    *  with the day's working hours at all — a different, more honest thing
-   *  to say than "it's full", which implies bookings are the reason. */
-  blockedReason: "day-off" | "all-day-conflict" | "outside-working-hours" | null;
+   *  to say than "it's full", which implies bookings are the reason.
+   *  "already-passed-today": the requested named slot or exact time is
+   *  within working hours, but its window (or the exact minute itself) is
+   *  already behind the "now" floor applied to today specifically — see
+   *  suggestBestDay's `now` parameter. Distinct from outside-working-hours
+   *  because it's a true, honest "too late today", not a working-hours
+   *  mismatch, and — for a specific time — advisory rather than a hard
+   *  block (the normal Book-it-anyway override still applies). */
+  blockedReason:
+    | "day-off"
+    | "all-day-conflict"
+    | "outside-working-hours"
+    | "already-passed-today"
+    | null;
   /** What actually constrains the chosen gap. isHome covers the start/end
    *  of the working day. Meaningful when fits === true. */
   previousNeighbor: RouteNeighbor;
@@ -1169,9 +1181,20 @@ function analyzeDayGaps(
     // hours, so intersect the gap with them. A gap that's wide open at 8am
     // is no help to an "Afternoon" job.
     const slotRange = requestedSlot ? NAMED_SLOT_RANGES[requestedSlot] : null;
-    const earliestStartMinutes = slotRange
-      ? Math.max(gapWindow.earliestStartMinutes, slotRange.startMinutes)
-      : gapWindow.earliestStartMinutes;
+    // computeGapWindow only grounds earliestStartMinutes in
+    // preferences.workdayStartMinutes when the previous neighbor is home —
+    // a gap after a REAL job is bounded purely by when that job releases
+    // you, which is correct on every other day, but on TODAY specifically
+    // workdayStartMinutes also carries the "now" floor (see suggestBestDay),
+    // and a job that released you at 9am doesn't un-pass a floor that's
+    // since moved to 7:30pm. Clamped here, after slot-range intersection,
+    // so it applies uniformly regardless of which gap this is.
+    const earliestStartMinutes = Math.max(
+      slotRange
+        ? Math.max(gapWindow.earliestStartMinutes, slotRange.startMinutes)
+        : gapWindow.earliestStartMinutes,
+      preferences.workdayStartMinutes
+    );
     const latestStartMinutes = slotRange
       ? Math.min(gapWindow.latestStartMinutes, slotRange.endMinutes)
       : gapWindow.latestStartMinutes;
@@ -1306,6 +1329,14 @@ function analyzeDayGaps(
  * worth suggesting at all.
  *
  * Returns null only if there are no candidate days at all.
+ *
+ * `now`, when given, is "the user's current wall-clock position" — the date
+ * their today's date falls on, and the current time as minutes-since-
+ * midnight, both already resolved to their profile timezone by the caller.
+ * Deliberately not a `Date()` read in here: keeps this function pure and
+ * its tests deterministic. Only `now.todayDate` among `candidateDates` is
+ * ever affected, and only to push an already-elapsed part of TODAY out of
+ * feasibility — every other candidate day is untouched.
  */
 export function suggestBestDay(
   newJob: Coordinates,
@@ -1314,7 +1345,8 @@ export function suggestBestDay(
   candidateDates: string[],
   existingJobs: ExistingJob[],
   preferences: SchedulingPreferences = DEFAULT_SCHEDULING_PREFERENCES,
-  newJobDurationMinutesRaw: number | null = null
+  newJobDurationMinutesRaw: number | null = null,
+  now: { todayDate: string; nowMinutes: number } | null = null
 ): BestDayResult | null {
   if (candidateDates.length === 0) {
     return null;
@@ -1334,9 +1366,27 @@ export function suggestBestDay(
   const allDays: DayRoute[] = candidateDates.map((date) => {
     const weekday = weekdayKeyOf(date);
     const dayHours = preferences.workingHours[weekday] ?? DEFAULT_SCHEDULING_PREFERENCES.workingHours[weekday];
+
+    // A day that's already underway can't be offered from its configured
+    // start any more — "Morning" at 6:57pm makes no sense. Rounded up to
+    // the nearest 15 (not down) so the floor is never a moment earlier
+    // than it honestly is, plus a 30-minute buffer since a suggestion
+    // offered for literally right now isn't realistically bookable either.
+    // Never applied to an all-day request: it claims the whole day as a
+    // unit regardless of what time it currently is, not a window within it.
+    const isToday = now !== null && date === now.todayDate;
+    const todayFloorMinutes =
+      isToday && newJobTime.type !== "all_day"
+        ? Math.ceil((now!.nowMinutes + 30) / 15) * 15
+        : null;
+    const effectiveStartMinutes =
+      todayFloorMinutes !== null
+        ? Math.max(dayHours.startMinutes, todayFloorMinutes)
+        : dayHours.startMinutes;
+
     const dayWindow: DayScheduleWindow = {
       maxTravelRangeKm: preferences.maxTravelRangeKm,
-      workdayStartMinutes: dayHours.startMinutes,
+      workdayStartMinutes: effectiveStartMinutes,
       workdayEndMinutes: dayHours.endMinutes,
     };
 
@@ -1382,17 +1432,44 @@ export function suggestBestDay(
     const requestedSlot = isNamedSlot(newJobTime.type) ? newJobTime.type : null;
 
     // A requested named slot with zero overlap against the day's actual
-    // working hours (e.g. "Night" when the day ends at 6pm) can never be
-    // booked here no matter what else is going on — decided upfront, the
-    // same way day-off/all-day-conflict are, rather than running the full
-    // gap search only to watch every single gap fail for the same reason.
-    const slotOutsideWorkingHours =
+    // CONFIGURED working hours (e.g. "Night" when the day ends at 6pm) can
+    // never be booked here no matter what else is going on — decided
+    // upfront, the same way day-off/all-day-conflict are, rather than
+    // running the full gap search only to watch every single gap fail for
+    // the same reason. Deliberately checked against dayHours, not
+    // dayWindow/effectiveStartMinutes: this is "the hours themselves don't
+    // cover this slot", independent of what time it happens to be right now.
+    const slotOutsideConfiguredHours =
       !!requestedSlot &&
-      (NAMED_SLOT_RANGES[requestedSlot].startMinutes >= dayWindow.workdayEndMinutes ||
-        NAMED_SLOT_RANGES[requestedSlot].endMinutes <= dayWindow.workdayStartMinutes);
+      (NAMED_SLOT_RANGES[requestedSlot].startMinutes >= dayHours.endMinutes ||
+        NAMED_SLOT_RANGES[requestedSlot].endMinutes <= dayHours.startMinutes);
+
+    // Within configured hours, but today's "now" floor has already eaten
+    // the whole slot (e.g. "Morning" requested at 6:57pm) — a true, honest
+    // "too late today", not a working-hours mismatch, so it gets its own
+    // message rather than reusing outside-working-hours's.
+    const slotAlreadyPassedToday =
+      !!requestedSlot &&
+      !slotOutsideConfiguredHours &&
+      todayFloorMinutes !== null &&
+      NAMED_SLOT_RANGES[requestedSlot].endMinutes <= effectiveStartMinutes;
+
+    const slotBlockedUpfront = slotOutsideConfiguredHours || slotAlreadyPassedToday;
+
+    // An exact time already behind today's "now" floor — advisory, not a
+    // hard block (the caller still offers Book it anyway), so this doesn't
+    // feed into slotBlockedUpfront / skip the gap search the way the named-
+    // slot cases above do. Pure clock fact: compared against the floor
+    // itself, not effectiveStartMinutes, so it fires regardless of whether
+    // working hours have even started yet.
+    const specificTimeAlreadyPassedToday =
+      newJobTime.type === "specific" &&
+      todayFloorMinutes !== null &&
+      newJobSortKey !== null &&
+      newJobSortKey < todayFloorMinutes;
 
     const gapAnalysis =
-      dayHours.enabled && !slotOutsideWorkingHours && (isFlexible || requestedSlot)
+      dayHours.enabled && !slotBlockedUpfront && (isFlexible || requestedSlot)
         ? analyzeDayGaps(
             newJob,
             home,
@@ -1441,7 +1518,7 @@ export function suggestBestDay(
             slot: null,
             blockedSlots: [],
           }
-        : slotOutsideWorkingHours
+        : slotOutsideConfiguredHours
           ? {
               fits: false,
               blockedReason: "outside-working-hours",
@@ -1454,7 +1531,20 @@ export function suggestBestDay(
               slot: null,
               blockedSlots: [],
             }
-          : (gapAnalysis?.option ?? null);
+          : slotAlreadyPassedToday || specificTimeAlreadyPassedToday
+            ? {
+                fits: false,
+                blockedReason: "already-passed-today",
+                previousNeighbor: buildNeighbor(null, newJob, home),
+                nextNeighbor: buildNeighbor(null, newJob, home),
+                earliestStartMinutes: dayWindow.workdayStartMinutes,
+                latestStartMinutes: dayWindow.workdayEndMinutes,
+                shortfallMinutes: null,
+                startMinutes: null,
+                slot: null,
+                blockedSlots: [],
+              }
+            : (gapAnalysis?.option ?? null);
 
     // A flexible job whose suggestion resolved to a NAMED slot (a wide
     // window, not an exact time) doesn't actually get inserted at "the gap

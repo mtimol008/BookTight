@@ -12,6 +12,7 @@ import {
   getMonthLeadingBlankCells,
   getMonthRange,
   getTodayDateString,
+  getTodayDateStringInTimezone,
   parseMonthParam,
   shiftMonth,
 } from "@/lib/week";
@@ -80,7 +81,12 @@ export default async function CalendarPage({
     getCurrentProfile(),
   ]);
 
-  const today = getTodayDateString();
+  // The user's own today, not the server's — see nowForScheduling in
+  // actions.ts for why that matters during BST. Computed after the
+  // Promise.all above (not before it) so profile/jobs stay parallel.
+  const today = profile
+    ? getTodayDateStringInTimezone(profile.timezone)
+    : getTodayDateString();
   // Whatever was tapped, as long as it's actually in the shown month;
   // otherwise today if today falls in this month; otherwise nothing
   // selected — a month with no natural default just shows the grid alone.
