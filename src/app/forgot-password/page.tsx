@@ -1,0 +1,31 @@
+import Link from "next/link";
+import { ForgotPasswordForm } from "@/components/ForgotPasswordForm";
+
+export default function ForgotPasswordPage() {
+  return (
+    <main className="shell shell--bare">
+      <div style={{ textAlign: "center", marginBottom: 28 }}>
+        <div className="wordmark wordmark--lg">Booktight</div>
+        <div className="tagline" style={{ marginTop: 6 }}>
+          Job scheduling, sorted by geography
+        </div>
+      </div>
+
+      <div className="card">
+        <h1 className="screen-title" style={{ marginBottom: 18 }}>Reset your password</h1>
+        <p className="note" style={{ marginTop: 0, marginBottom: 18 }}>
+          Enter your account email and we&rsquo;ll send you a link to set a new password.
+        </p>
+        <ForgotPasswordForm />
+      </div>
+
+      <p style={{ textAlign: "center", marginTop: 18 }}>
+        <Link href="/login" className="muted" style={{ fontSize: 13 }}>
+          Back to sign in
+        </Link>
+      </p>
+
+      <p className="version">v1.0.2-stable</p>
+    </main>
+  );
+}

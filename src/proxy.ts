@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Pages logged-out visitors can reach, and logged-in users get bounced away
 // from (back to "/") since they have no reason to see a login/signup form.
-const AUTH_PAGES = ["/login", "/signup"];
+const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
 
 // Publicly fetchable endpoints that skip the login gate entirely, in both
 // directions — e.g. the .ics calendar feed, which Apple/Google/Outlook
@@ -12,8 +12,17 @@ const AUTH_PAGES = ["/login", "/signup"];
 // /email-confirmed belongs here too: it's the page Supabase's confirmation
 // link lands on, reached by a brand-new user who by definition isn't
 // signed in yet — without it, the login gate bounced them straight to
-// /login before they ever saw the confirmation.
-const PUBLIC_PATHS = [...AUTH_PAGES, "/api/calendar/feed", "/email-confirmed"];
+// /login before they ever saw the confirmation. /reset-password is the
+// same idea for the recovery link, except it's deliberately NOT in
+// AUTH_PAGES — a logged-in user should still be able to use it (the
+// recovery link itself, not being logged in, is what's granting access
+// here), where /login and /signup never make sense once already signed in.
+const PUBLIC_PATHS = [
+  ...AUTH_PAGES,
+  "/api/calendar/feed",
+  "/email-confirmed",
+  "/reset-password",
+];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

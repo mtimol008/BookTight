@@ -2,6 +2,7 @@
 
 import { geocodeAddress } from "@/lib/geocoding";
 import { createClient } from "@/lib/supabase/server";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 import { redirect } from "next/navigation";
 
 export interface SignUpState {
@@ -20,13 +21,21 @@ export async function signUp(
   const confirmPassword = formData.get("confirmPassword")?.toString() ?? "";
   const homeAddress = formData.get("homeAddress")?.toString().trim() ?? "";
   const timezone = formData.get("timezone")?.toString().trim() || undefined;
+  const turnstileToken = formData.get("turnstileToken")?.toString() ?? null;
 
   if (!fullName || !email || !password || !confirmPassword || !homeAddress) {
     return { error: "Full name, email, password, confirmation, and home address are all required." };
   }
- 
+
   if (password !== confirmPassword) {
     return { error: "Passwords do not match." };
+  }
+
+  // Must run before the geocode call and before auth.signUp — both cost
+  // real money/quota, and neither should run for an unverified request.
+  const verified = await verifyTurnstileToken(turnstileToken);
+  if (!verified) {
+    return { error: "Verification failed. Please try again." };
   }
 
   const geocoded = await geocodeAddress(homeAddress);

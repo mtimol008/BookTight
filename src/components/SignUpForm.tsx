@@ -4,6 +4,8 @@ import { useRef, useState, useActionState, useSyncExternalStore } from "react";
 import { signUp, type SignUpState } from "@/app/signup/actions";
 import { getAddressSuggestions } from "@/app/actions";
 import { EyeIcon, EyeOffIcon, PinIcon } from "@/components/icons";
+import { Turnstile } from "@/components/Turnstile";
+import { isTurnstileDisabled } from "@/lib/turnstileConfig";
 import type { AddressSuggestion } from "@/lib/geocoding";
 
 const initialState: SignUpState = {};
@@ -42,6 +44,8 @@ export function SignUpForm() {
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileDisabled = isTurnstileDisabled();
 
   function handleAddressChange(value: string) {
     setHomeAddress(value);
@@ -72,6 +76,7 @@ export function SignUpForm() {
   return (
     <form action={formAction}>
       <input type="hidden" name="timezone" value={timezone} />
+      <input type="hidden" name="turnstileToken" value={turnstileToken ?? ""} />
       <div className="field">
         <label className="field-label" htmlFor="signup-name">
           Full name
@@ -212,10 +217,17 @@ export function SignUpForm() {
       {confirmPassword && password !== confirmPassword && (
         <p className="error-text">Passwords do not match.</p>
       )}
+
+      {!turnstileDisabled && <Turnstile onToken={setTurnstileToken} />}
+
       {state.error && <p className="error-text">{state.error}</p>}
       {state.message && <p className="success-text">{state.message}</p>}
 
-      <button type="submit" className="btn btn--primary btn--block" disabled={isPending}>
+      <button
+        type="submit"
+        className="btn btn--primary btn--block"
+        disabled={isPending || (!turnstileDisabled && !turnstileToken)}
+      >
         {isPending ? "Creating account..." : "Create Account"}
       </button>
     </form>
