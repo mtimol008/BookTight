@@ -4,20 +4,17 @@ import { useState, useActionState } from "react";
 import Link from "next/link";
 import { signIn, type LoginState } from "@/app/login/actions";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
-import { Turnstile } from "@/components/Turnstile";
-import { isTurnstileDisabled } from "@/lib/turnstileConfig";
 
 const initialState: LoginState = {};
 
+// No Turnstile widget here, unlike SignUpForm/ForgotPasswordForm —
+// see the matching comment in login/actions.ts for why.
 export function LoginForm() {
   const [state, formAction, isPending] = useActionState(signIn, initialState);
   const [showPassword, setShowPassword] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const turnstileDisabled = isTurnstileDisabled();
 
   return (
     <form action={formAction}>
-      <input type="hidden" name="turnstileToken" value={turnstileToken ?? ""} />
       <div className="field">
         <label className="field-label" htmlFor="email">
           Email
@@ -61,15 +58,9 @@ export function LoginForm() {
         </p>
       </div>
 
-      {!turnstileDisabled && <Turnstile onToken={setTurnstileToken} />}
-
       {state.error && <p className="error-text">{state.error}</p>}
 
-      <button
-        type="submit"
-        className="btn btn--primary btn--block"
-        disabled={isPending || (!turnstileDisabled && !turnstileToken)}
-      >
+      <button type="submit" className="btn btn--primary btn--block" disabled={isPending}>
         {isPending ? "Signing in..." : "Sign In"}
       </button>
     </form>
