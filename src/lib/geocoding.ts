@@ -2,15 +2,117 @@
 // Server-side only — MAPBOX_ACCESS_TOKEN is not a NEXT_PUBLIC_ variable, so
 // it never reaches the browser bundle.
 
+import { createClient } from "./supabase/server";
+
 export interface GeocodeResult {
   latitude: number;
   longitude: number;
   formattedAddress: string;
 }
 
+const GEOCODE_CACHE_TTL_HOURS = 24;
+const GEOCODE_DAILY_LIMIT_PER_USER = 100;
+
+function addressCacheKey(address: string): string {
+  return address.trim().toLowerCase();
+}
+
+/**
+ * The result this exact address text already produced, if it's still
+ * fresh — so re-submitting a form without changing the address (a retried
+ * save, a tweak to some other field) reuses the previous answer instead of
+ * re-billing Mapbox. Shared across every user: the same address geocodes
+ * to the same place for anyone, so there's no reason to key this per-user.
+ * Any Supabase error is treated as a cache miss rather than surfaced —
+ * this is a cost optimization, not something that should ever block a
+ * geocode the user is actually waiting on.
+ */
+async function getCachedGeocode(address: string): Promise<GeocodeResult | null> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .rpc("get_cached_geocode", {
+        p_address_key: addressCacheKey(address),
+        p_ttl_hours: GEOCODE_CACHE_TTL_HOURS,
+      })
+      .maybeSingle();
+
+    const row = data as { latitude: number; longitude: number; formatted_address: string } | null;
+    if (!row) return null;
+    return {
+      latitude: row.latitude,
+      longitude: row.longitude,
+      formattedAddress: row.formatted_address,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedGeocode(address: string, result: GeocodeResult): Promise<void> {
+  try {
+    const supabase = await createClient();
+    await supabase.rpc("set_cached_geocode", {
+      p_address_key: addressCacheKey(address),
+      p_latitude: result.latitude,
+      p_longitude: result.longitude,
+      p_formatted_address: result.formattedAddress,
+    });
+  } catch {
+    // Caching is an optimization — losing a cache write just means the
+    // next identical request pays for a fresh Mapbox call.
+  }
+}
+
+/**
+ * True if this user is still under today's cap, atomically incrementing
+ * their count as part of the check (see the migration's
+ * check_and_increment_geocode_usage for why this has to be atomic). Only
+ * ever called for a REAL Mapbox request — a cache hit never reaches here,
+ * so a user replaying the same address all day only uses one call's worth
+ * of quota.
+ */
+async function checkGeocodeRateLimit(userId: string): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("check_and_increment_geocode_usage", {
+      p_user_id: userId,
+      p_daily_limit: GEOCODE_DAILY_LIMIT_PER_USER,
+    });
+    if (error) return true;
+    return data !== false;
+  } catch {
+    // Fail open — a transient DB error shouldn't block a legitimate job
+    // from being scheduled. This is a cost safety net, not a hard limit.
+    return true;
+  }
+}
+
+export interface GeocodeAddressOptions {
+  /** The acting user, for the per-user daily cap. Omitted at signup, where
+   *  there's no account yet — Turnstile is that path's abuse defense
+   *  instead of a per-user count. */
+  userId?: string;
+}
+
 export async function geocodeAddress(
-  address: string
+  address: string,
+  options: GeocodeAddressOptions = {}
 ): Promise<GeocodeResult | null> {
+  const cached = await getCachedGeocode(address);
+  if (cached) {
+    return cached;
+  }
+
+  if (options.userId) {
+    const allowed = await checkGeocodeRateLimit(options.userId);
+    if (!allowed) {
+      throw new Error(
+        "You've hit today's address-lookup limit. Try again tomorrow."
+      );
+    }
+  }
+
   const token = process.env.MAPBOX_ACCESS_TOKEN;
   if (!token) {
     throw new Error(
@@ -36,11 +138,14 @@ export async function geocodeAddress(
   }
 
   const [longitude, latitude] = feature.center as [number, number];
-  return {
+  const result: GeocodeResult = {
     latitude,
     longitude,
     formattedAddress: feature.place_name as string,
   };
+
+  await setCachedGeocode(address, result);
+  return result;
 }
 
 export interface AddressSuggestion {

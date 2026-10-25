@@ -377,17 +377,17 @@ export async function getSchedulingSuggestion(
   excludeJobId?: string,
   durationMinutes: number | null = null
 ): Promise<SuggestionResult> {
-  const geocoded = await geocodeAddress(address);
-  if (!geocoded) {
-    throw new Error(
-      `Could not find coordinates for "${address}". Try a more specific address.`
-    );
-  }
-
   const profile = await getCurrentProfile();
   if (!profile) {
     throw new Error(
       "You must be logged in with a home address set to get a day suggestion."
+    );
+  }
+
+  const geocoded = await geocodeAddress(address, { userId: profile.id });
+  if (!geocoded) {
+    throw new Error(
+      `Could not find coordinates for "${address}". Try a more specific address.`
     );
   }
 
@@ -719,9 +719,17 @@ export interface UpdateJobFormInput {
 export async function updateExistingJob(
   input: UpdateJobFormInput
 ): Promise<AhaMomentPayload | null> {
+  // Only reject a date that's actually changing to a past one — a job
+  // already sitting on an earlier date this week (not yet reviewed) still
+  // needs to be editable without moving it, which is exactly the "keep
+  // current date" case the day-suggestion panel already supports. The
+  // user's own today, not the server's — see nowForScheduling.
+  const profile = await getCurrentProfile();
+  const today = profile ? getTodayDateStringInTimezone(profile.timezone) : getTodayDateString();
+
   // Re-geocode on every edit (not just when the address looks different) so
   // stored coordinates never drift out of sync with the address text.
-  const geocoded = await geocodeAddress(input.address);
+  const geocoded = await geocodeAddress(input.address, { userId: profile?.id });
   if (!geocoded) {
     throw new Error(
       `Could not find coordinates for "${input.address}". Try a more specific address.`
@@ -734,14 +742,6 @@ export async function updateExistingJob(
   // into an unrelated group. Read the job fresh rather than trusting
   // whatever the client last had, since it may be stale.
   const current = await getJobById(input.id);
-
-  // Only reject a date that's actually changing to a past one — a job
-  // already sitting on an earlier date this week (not yet reviewed) still
-  // needs to be editable without moving it, which is exactly the "keep
-  // current date" case the day-suggestion panel already supports. The
-  // user's own today, not the server's — see nowForScheduling.
-  const profile = await getCurrentProfile();
-  const today = profile ? getTodayDateStringInTimezone(profile.timezone) : getTodayDateString();
   if (input.date !== current?.date && input.date < today) {
     throw new Error("Can't move a job to a date that's already passed.");
   }

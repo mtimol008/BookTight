@@ -23,20 +23,20 @@ export async function updateProfileBasics(
     return { error: "Full name, home address, and timezone are all required." };
   }
 
-  // Re-geocode on every save, not just when the text looks different — the
-  // same convention updateExistingJob uses for a job's address, so the
-  // stored address and coordinates can never drift out of sync.
-  const geocoded = await geocodeAddress(homeAddress);
-  if (!geocoded) {
-    return { error: `Could not find "${homeAddress}". Try a more specific address.` };
-  }
-
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
     return { error: "You must be logged in to update your account." };
+  }
+
+  // Re-geocode on every save, not just when the text looks different — the
+  // same convention updateExistingJob uses for a job's address, so the
+  // stored address and coordinates can never drift out of sync.
+  const geocoded = await geocodeAddress(homeAddress, { userId: user.id });
+  if (!geocoded) {
+    return { error: `Could not find "${homeAddress}". Try a more specific address.` };
   }
 
   const { error } = await supabase
