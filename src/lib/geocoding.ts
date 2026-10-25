@@ -2,6 +2,7 @@
 // Server-side only — MAPBOX_ACCESS_TOKEN is not a NEXT_PUBLIC_ variable, so
 // it never reaches the browser bundle.
 
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "./supabase/server";
 
 export interface GeocodeResult {
@@ -10,7 +11,12 @@ export interface GeocodeResult {
   formattedAddress: string;
 }
 
-const GEOCODE_CACHE_TTL_HOURS = 24;
+// Permanent-mode results are explicitly allowed to be "cached and stored
+// indefinitely" per Mapbox's own terms — this isn't literally infinite so
+// the cache still has some self-healing path if Mapbox's underlying data
+// ever changes, but a year comfortably eliminates repeat billing for any
+// address that gets touched again within a realistic timeframe.
+const GEOCODE_CACHE_TTL_HOURS = 8760;
 const GEOCODE_DAILY_LIMIT_PER_USER = 100;
 
 function addressCacheKey(address: string): string {
@@ -132,8 +138,20 @@ export async function geocodeAddress(
 
   const response = await fetch(url);
   if (!response.ok) {
+    // A failed permanent-mode request never falls back to a temporary
+    // lookup and stores that instead — that would silently store data
+    // obtained without the storage right Mapbox's terms require. It just
+    // fails, visibly, every time (a 402/403 here most likely means a
+    // billing problem on the Mapbox account, which needs a human to fix,
+    // not an app-level workaround).
+    Sentry.captureException(
+      new Error(
+        `Mapbox permanent geocoding request failed: ${response.status} ${response.statusText}`
+      ),
+      { tags: { mapbox_status: response.status } }
+    );
     throw new Error(
-      `Mapbox geocoding request failed: ${response.status} ${response.statusText}`
+      "Couldn't verify that address right now. Please try again in a moment — if this keeps happening, let support know."
     );
   }
 
