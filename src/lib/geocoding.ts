@@ -3,7 +3,7 @@
 // it never reaches the browser bundle.
 
 import * as Sentry from "@sentry/nextjs";
-import { createClient } from "./supabase/server";
+import { createAdminClient } from "./supabase/admin";
 
 export interface GeocodeResult {
   latitude: number;
@@ -32,10 +32,16 @@ function addressCacheKey(address: string): string {
  * Any Supabase error is treated as a cache miss rather than surfaced —
  * this is a cost optimization, not something that should ever block a
  * geocode the user is actually waiting on.
+ *
+ * Uses the service-role client, not the caller's own session — these
+ * functions are no longer reachable via the anon/authenticated roles'
+ * direct RPC access at all (see the geocode_usage_revoke migration), so
+ * the app server is the only thing that can call them now, same as the
+ * admin client is already used for account deletion.
  */
 async function getCachedGeocode(address: string): Promise<GeocodeResult | null> {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase
       .rpc("get_cached_geocode", {
         p_address_key: addressCacheKey(address),
@@ -57,7 +63,7 @@ async function getCachedGeocode(address: string): Promise<GeocodeResult | null> 
 
 async function setCachedGeocode(address: string, result: GeocodeResult): Promise<void> {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase.rpc("set_cached_geocode", {
       p_address_key: addressCacheKey(address),
       p_latitude: result.latitude,
@@ -76,11 +82,14 @@ async function setCachedGeocode(address: string, result: GeocodeResult): Promise
  * check_and_increment_geocode_usage for why this has to be atomic). Only
  * ever called for a REAL Mapbox request — a cache hit never reaches here,
  * so a user replaying the same address all day only uses one call's worth
- * of quota.
+ * of quota. `userId` must always come from the caller's own verified
+ * session (see every call site in actions.ts) — never from client input —
+ * since the service-role client bypasses RLS entirely and would happily
+ * increment anyone's counter if asked to.
  */
 async function checkGeocodeRateLimit(userId: string): Promise<boolean> {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data, error } = await supabase.rpc("check_and_increment_geocode_usage", {
       p_user_id: userId,
       p_daily_limit: GEOCODE_DAILY_LIMIT_PER_USER,
