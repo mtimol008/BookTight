@@ -120,9 +120,15 @@ export async function geocodeAddress(
     );
   }
 
+  // permanent=true: this result gets stored (job/profile row, plus our own
+  // cache above) rather than used once and discarded, which Mapbox's terms
+  // require declaring explicitly — the default (temporary) mode forbids
+  // storage. searchAddresses below stays on the default: autocomplete
+  // suggestions are shown and discarded, never stored, so they're exactly
+  // the "temporary" use case and get the free/cheaper rate.
   const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
     address
-  )}.json?access_token=${token}&limit=1`;
+  )}.json?access_token=${token}&limit=1&permanent=true`;
 
   const response = await fetch(url);
   if (!response.ok) {
