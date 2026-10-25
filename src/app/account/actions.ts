@@ -31,10 +31,28 @@ export async function updateProfileBasics(
     return { error: "You must be logged in to update your account." };
   }
 
+  // Biasing toward the EXISTING home (not the new address itself — there's
+  // nothing else to bias toward when the thing being set is "home") covers
+  // the common case of fixing a typo or adding detail to an address that's
+  // already roughly right. A genuinely new, far-away home address still
+  // geocodes correctly — proximity only re-ranks ambiguous matches, it
+  // never excludes anything, so a real address elsewhere in the country
+  // isn't blocked by a stale bias toward the old one.
+  const { data: existingProfile } = await supabase
+    .from("profiles")
+    .select("home_latitude, home_longitude")
+    .eq("id", user.id)
+    .maybeSingle();
+
   // Re-geocode on every save, not just when the text looks different — the
   // same convention updateExistingJob uses for a job's address, so the
   // stored address and coordinates can never drift out of sync.
-  const geocoded = await geocodeAddress(homeAddress, { userId: user.id });
+  const geocoded = await geocodeAddress(homeAddress, {
+    userId: user.id,
+    proximity: existingProfile
+      ? [existingProfile.home_longitude, existingProfile.home_latitude]
+      : undefined,
+  });
   if (!geocoded) {
     return { error: `Could not find "${homeAddress}". Try a more specific address.` };
   }

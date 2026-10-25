@@ -384,7 +384,10 @@ export async function getSchedulingSuggestion(
     );
   }
 
-  const geocoded = await geocodeAddress(address, { userId: profile.id });
+  const geocoded = await geocodeAddress(address, {
+    userId: profile.id,
+    proximity: [profile.home_longitude, profile.home_latitude],
+  });
   if (!geocoded) {
     throw new Error(
       `Could not find coordinates for "${address}". Try a more specific address.`
@@ -718,7 +721,10 @@ export async function confirmAndSaveJob(
   // which already does this. The cache (see geocoding.ts) makes this
   // cheap for the common case: the same address the suggestion step just
   // geocoded moments earlier.
-  const geocoded = await geocodeAddress(input.address, { userId: profile?.id });
+  const geocoded = await geocodeAddress(input.address, {
+    userId: profile?.id,
+    proximity: profile ? [profile.home_longitude, profile.home_latitude] : undefined,
+  });
   if (!geocoded) {
     throw new Error(
       `Could not find coordinates for "${input.address}". Try a more specific address.`
@@ -771,7 +777,10 @@ export async function updateExistingJob(
 
   // Re-geocode on every edit (not just when the address looks different) so
   // stored coordinates never drift out of sync with the address text.
-  const geocoded = await geocodeAddress(input.address, { userId: profile?.id });
+  const geocoded = await geocodeAddress(input.address, {
+    userId: profile?.id,
+    proximity: profile ? [profile.home_longitude, profile.home_latitude] : undefined,
+  });
   if (!geocoded) {
     throw new Error(
       `Could not find coordinates for "${input.address}". Try a more specific address.`

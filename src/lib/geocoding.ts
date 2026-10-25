@@ -19,8 +19,44 @@ export interface GeocodeResult {
 const GEOCODE_CACHE_TTL_HOURS = 8760;
 const GEOCODE_DAILY_LIMIT_PER_USER = 100;
 
+// Booktight only serves UK tradespeople today — restricting to this one
+// named constant (not scattered string literals) both prevents the
+// "Oxford Road" -> Australia class of failure (confirmed live: several
+// common, short UK street names resolve to a different continent with no
+// restriction at all) and makes it a one-line change if that scope ever
+// changes.
+const MAPBOX_COUNTRY = "gb";
+
 function addressCacheKey(address: string): string {
   return address.trim().toLowerCase();
+}
+
+const UK_POSTCODE_PATTERN = /[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i;
+
+/**
+ * Whether this address TEXT is specific enough that geocoding it is safe
+ * to cache globally (shared across every user, keyed only on the text) —
+ * now that geocodeAddress applies proximity bias toward the asker's own
+ * home, the same short text ("Oxford Road") could legitimately resolve
+ * differently for two users in different places, which breaks the cache's
+ * core assumption that one address string always means one place.
+ *
+ * Confirmed live: every address with a UK postcode, or with at least 3
+ * comma-separated parts (street, area/city, country — the shape a full
+ * autocomplete-dropdown pick always has), geocoded to the exact same
+ * coordinates with or without proximity. Short, unqualified text
+ * ("Oxford Road", "Deansgate", a bare landmark name) did not — those
+ * depend on who's asking, so they're never written to the shared cache.
+ * Mapbox's own `relevance` score can't be used for this instead — it
+ * measures how well the result's name matches the query text, not whether
+ * it's geographically the right one for this user (a wrong-continent
+ * match can score relevance 1.0).
+ */
+function looksSpecificEnoughToCache(address: string): boolean {
+  const trimmed = address.trim();
+  if (UK_POSTCODE_PATTERN.test(trimmed)) return true;
+  const parts = trimmed.split(",").map((p) => p.trim()).filter(Boolean);
+  return parts.length >= 3;
 }
 
 /**
@@ -62,6 +98,7 @@ async function getCachedGeocode(address: string): Promise<GeocodeResult | null> 
 }
 
 async function setCachedGeocode(address: string, result: GeocodeResult): Promise<void> {
+  if (!looksSpecificEnoughToCache(address)) return;
   try {
     const supabase = createAdminClient();
     await supabase.rpc("set_cached_geocode", {
@@ -108,6 +145,13 @@ export interface GeocodeAddressOptions {
    *  there's no account yet — Turnstile is that path's abuse defense
    *  instead of a per-user count. */
   userId?: string;
+  /** [lon, lat] — biases ambiguous short text toward the user's own home,
+   *  same as searchAddresses already does for autocomplete. Confirmed live:
+   *  this only matters for short/ambiguous text — a fully-qualified address
+   *  (the shape a dropdown pick always has) resolves identically with or
+   *  without it. Omitted at signup (no home yet) and left unset when
+   *  genuinely unavailable rather than guessed at. */
+  proximity?: [number, number];
 }
 
 export async function geocodeAddress(
@@ -141,9 +185,13 @@ export async function geocodeAddress(
   // storage. searchAddresses below stays on the default: autocomplete
   // suggestions are shown and discarded, never stored, so they're exactly
   // the "temporary" use case and get the free/cheaper rate.
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+  let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
     address
-  )}.json?access_token=${token}&limit=1&permanent=true`;
+  )}.json?access_token=${token}&limit=1&permanent=true&country=${MAPBOX_COUNTRY}`;
+
+  if (options.proximity) {
+    url += `&proximity=${options.proximity[0]},${options.proximity[1]}`;
+  }
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -254,7 +302,7 @@ export async function searchAddresses(
 
   let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
     query
-  )}.json?access_token=${token}&autocomplete=true&limit=5`;
+  )}.json?access_token=${token}&autocomplete=true&limit=5&country=${MAPBOX_COUNTRY}`;
 
   if (options.proximity) {
     url += `&proximity=${options.proximity[0]},${options.proximity[1]}`;
