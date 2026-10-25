@@ -657,29 +657,24 @@ export function NewJobForm({
           )}
         </div>
 
-        <details>
-          <summary className="btn--quiet" style={{ cursor: "pointer" }}>
-            More options
-          </summary>
-          <div className="field" style={{ marginTop: 12 }}>
-            <span className="field-label">Urgency</span>
-            <div className="chips">
-              {URGENCY_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`chip${urgency === option.value ? " is-selected" : ""}`}
-                  onClick={() => handleUrgencyChange(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
-              {URGENCY_OPTIONS.find((o) => o.value === urgency)?.description}
-            </p>
+        <div className="field">
+          <span className="field-label">Urgency</span>
+          <div className="chips">
+            {URGENCY_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`chip${urgency === option.value ? " is-selected" : ""}`}
+                onClick={() => handleUrgencyChange(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-        </details>
+          <p className="note" style={{ marginTop: 6, marginBottom: 0 }}>
+            {URGENCY_OPTIONS.find((o) => o.value === urgency)?.description}
+          </p>
+        </div>
 
         {error && <p className="error-text">{error}</p>}
 
