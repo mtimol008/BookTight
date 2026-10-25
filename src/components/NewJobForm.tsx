@@ -413,8 +413,6 @@ export function NewJobForm({
       try {
         const aha = await confirmAndSaveJob({
           address: suggestion.formattedAddress,
-          latitude: suggestion.coordinates.latitude,
-          longitude: suggestion.coordinates.longitude,
           date: selectedDate,
           timeSlotType: finalTime.type,
           specificTime: finalTime.specificTime,

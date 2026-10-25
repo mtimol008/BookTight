@@ -660,8 +660,6 @@ async function checkAhaMoment(date: string): Promise<AhaMomentPayload | null> {
 
 export interface ConfirmJobInput {
   address: string;
-  latitude: number;
-  longitude: number;
   date: string;
   timeSlotType: string;
   specificTime: string | null;
@@ -673,9 +671,39 @@ export interface ConfirmJobInput {
   urgency?: JobUrgency;
 }
 
+const ADDRESS_MAX_LENGTH = 500;
+const CUSTOMER_NAME_MAX_LENGTH = 200;
+const DESCRIPTION_MAX_LENGTH = 2000;
+
+/**
+ * The server-side floor under the client's HTML `required`/length limits —
+ * a direct server-action call bypasses those entirely, and these are
+ * otherwise-unbounded text columns. Shared by confirmAndSaveJob and
+ * updateExistingJob, the two places a job's text fields get written.
+ */
+function validateJobFields(input: { address: string; customerName: string; description: string }): void {
+  if (!input.address.trim()) {
+    throw new Error("Address is required.");
+  }
+  if (input.address.length > ADDRESS_MAX_LENGTH) {
+    throw new Error(`Address must be ${ADDRESS_MAX_LENGTH} characters or fewer.`);
+  }
+  if (!input.customerName.trim()) {
+    throw new Error("Customer name is required.");
+  }
+  if (input.customerName.length > CUSTOMER_NAME_MAX_LENGTH) {
+    throw new Error(`Customer name must be ${CUSTOMER_NAME_MAX_LENGTH} characters or fewer.`);
+  }
+  if (input.description.length > DESCRIPTION_MAX_LENGTH) {
+    throw new Error(`Description must be ${DESCRIPTION_MAX_LENGTH} characters or fewer.`);
+  }
+}
+
 export async function confirmAndSaveJob(
   input: ConfirmJobInput
 ): Promise<AhaMomentPayload | null> {
+  validateJobFields(input);
+
   // The user's own today, not the server's — see nowForScheduling. Falls
   // back to the server-local date only in the unexpected case of no
   // profile (RLS would already have refused the insert below regardless).
@@ -685,10 +713,22 @@ export async function confirmAndSaveJob(
     throw new Error("Can't book a job on a date that's already passed.");
   }
 
+  // Re-geocode server-side rather than trusting client-supplied
+  // coordinates (security review finding) — mirrors updateExistingJob,
+  // which already does this. The cache (see geocoding.ts) makes this
+  // cheap for the common case: the same address the suggestion step just
+  // geocoded moments earlier.
+  const geocoded = await geocodeAddress(input.address, { userId: profile?.id });
+  if (!geocoded) {
+    throw new Error(
+      `Could not find coordinates for "${input.address}". Try a more specific address.`
+    );
+  }
+
   await insertJob({
-    address: input.address,
-    latitude: input.latitude,
-    longitude: input.longitude,
+    address: geocoded.formattedAddress,
+    latitude: geocoded.latitude,
+    longitude: geocoded.longitude,
     date: input.date,
     time_slot_type: input.timeSlotType,
     specific_time: input.specificTime,
@@ -719,6 +759,8 @@ export interface UpdateJobFormInput {
 export async function updateExistingJob(
   input: UpdateJobFormInput
 ): Promise<AhaMomentPayload | null> {
+  validateJobFields(input);
+
   // Only reject a date that's actually changing to a past one — a job
   // already sitting on an earlier date this week (not yet reviewed) still
   // needs to be editable without moving it, which is exactly the "keep

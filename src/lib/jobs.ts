@@ -223,13 +223,20 @@ export async function setManualPositions(
 
   const results = await Promise.all(
     positions.map(({ id, position }) =>
-      supabase.from("jobs").update({ manual_position: position }).eq("id", id)
+      supabase
+        .from("jobs")
+        .update({ manual_position: position }, { count: "exact" })
+        .eq("id", id)
     )
   );
 
   const failed = results.find((r) => r.error);
   if (failed?.error) {
     throw new Error(`Failed to save the new order: ${failed.error.message}`);
+  }
+  // Same RLS-silent-no-op risk as deleteJob/setJobStatuses.
+  if (results.some((r) => !r.count)) {
+    throw new Error("Couldn't save the new order — one of those jobs may not be yours.");
   }
 }
 
@@ -243,10 +250,18 @@ export async function setJobStatuses(
 
   const supabase = await createClient();
 
-  const { error } = await supabase.from("jobs").update({ status }).in("id", ids);
+  const { error, count } = await supabase
+    .from("jobs")
+    .update({ status }, { count: "exact" })
+    .in("id", ids);
 
   if (error) {
     throw new Error(`Failed to update job status: ${error.message}`);
+  }
+  // Same RLS-silent-no-op risk as deleteJob — a count short of every id
+  // requested means at least one wasn't the caller's own.
+  if ((count ?? 0) !== ids.length) {
+    throw new Error("Couldn't update one or more of those jobs — they may not be yours.");
   }
 }
 
@@ -315,9 +330,18 @@ export async function updateJob(
 export async function deleteJob(id: string): Promise<void> {
   const supabase = await createClient();
 
-  const { error } = await supabase.from("jobs").delete().eq("id", id);
+  const { error, count } = await supabase
+    .from("jobs")
+    .delete({ count: "exact" })
+    .eq("id", id);
 
   if (error) {
     throw new Error(`Failed to delete job: ${error.message}`);
+  }
+  // RLS silently matches zero rows for an id that isn't the caller's own
+  // (deleting someone else's job) rather than erroring — without this
+  // check that looked identical to a real delete succeeding.
+  if (!count) {
+    throw new Error("Couldn't delete that job — it may already be gone.");
   }
 }
