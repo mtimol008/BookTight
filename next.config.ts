@@ -38,6 +38,13 @@ const cspReportOnly = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
+  // Relative path — the browser resolves it against the page's own
+  // origin, so this works unchanged on both booktight.co.uk and the
+  // legacy book-tight.vercel.app domain. report-uri is deprecated in
+  // favor of the newer Reporting API (report-to), but it's still the
+  // simplest widely-supported way to collect CSP violations today — see
+  // /api/csp-report's own comment for why this exists before enforcing.
+  "report-uri /api/csp-report",
 ]
   .join("; ");
 

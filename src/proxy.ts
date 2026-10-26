@@ -21,6 +21,7 @@ const PUBLIC_PATHS = [
   ...AUTH_PAGES,
   "/api/calendar/feed",
   "/api/health",
+  "/api/csp-report",
   "/email-confirmed",
   "/reset-password",
 ];
