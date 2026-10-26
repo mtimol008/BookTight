@@ -20,6 +20,7 @@ import {
   planDayRoute,
   suggestBestDay,
   formatMinutesAsClock,
+  isLowConfidenceGeocode,
   minutesToTimeValue,
   weekdayKeyOf,
   SUGGESTION_LOOKAHEAD_WEEKS,
@@ -83,6 +84,12 @@ export interface SuggestionResult {
   maxTravelRangeKm: number;
   maxJobsPerDay: number | null;
   distanceUnit: DistanceUnit;
+  /** Set when the resolved address is too uncertain to save without the
+   *  user double-checking it — see isLowConfidenceGeocode. The client shows
+   *  this right away (before the user fills in the rest of the form),
+   *  since catching a bad match here is exactly what the day/distance
+   *  numbers below would otherwise be silently wrong about. */
+  lowConfidenceAddress: boolean;
 }
 
 /** The profile's stored per-day HH:MM working-hours strings and km/count
@@ -468,6 +475,13 @@ export async function getSchedulingSuggestion(
     profile.distance_unit
   );
 
+  const lowConfidenceAddress = isLowConfidenceGeocode({
+    relevance: geocoded.relevance,
+    resultCoordinates: { latitude: geocoded.latitude, longitude: geocoded.longitude },
+    homeCoordinates: { latitude: profile.home_latitude, longitude: profile.home_longitude },
+    maxTravelRangeKm: preferences.maxTravelRangeKm,
+  });
+
   return {
     coordinates: { latitude: geocoded.latitude, longitude: geocoded.longitude },
     formattedAddress: geocoded.formattedAddress,
@@ -477,6 +491,7 @@ export async function getSchedulingSuggestion(
     maxTravelRangeKm: preferences.maxTravelRangeKm,
     maxJobsPerDay: preferences.maxJobsPerDay,
     distanceUnit: profile.distance_unit,
+    lowConfidenceAddress,
   };
 }
 

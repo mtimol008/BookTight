@@ -112,6 +112,10 @@ export function NewJobForm({
   const [customDateError, setCustomDateError] = useState<string | null>(null);
   const customDateRequestRef = useRef<string>("");
   const [warningDay, setWarningDay] = useState<DayRoute | null>(null);
+  // Whether the user has already said "yes, that's the right address" for
+  // the CURRENT suggestion — reset any time the suggestion is invalidated,
+  // so a new address/time/etc. always needs its own fresh confirmation.
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
   // Whether to adopt the suggested time. A plain boolean rather than a
   // slot value, because the suggestion can now be a "specific" time and
   // so can the requested time — comparing slot values couldn't tell the
@@ -169,6 +173,7 @@ export function NewJobForm({
   function invalidateSuggestion() {
     setSuggestion(null);
     setWarningDay(null);
+    setAddressConfirmed(false);
     resetCustomDateState();
     setSelectedDayTimeSuggestion(null);
     timeSuggestionRequestRef.current = "";
@@ -296,6 +301,7 @@ export function NewJobForm({
     setError(null);
     setSuggestion(null);
     setWarningDay(null);
+    setAddressConfirmed(false);
     resetCustomDateState();
     setCandidateIndex(0);
 
@@ -478,6 +484,7 @@ export function NewJobForm({
   }
 
   const warningComparison = warningDay ? distanceComparisonLabel(warningDay) : null;
+  const needsAddressConfirmation = !!suggestion?.lowConfidenceAddress && !addressConfirmed;
 
   const candidates = suggestion ? suggestion.allDays : [];
   const activeCandidate = candidates[candidateIndex] ?? null;
@@ -687,7 +694,32 @@ export function NewJobForm({
         )}
       </form>
 
-      {suggestion && (
+      {suggestion && needsAddressConfirmation && (
+        <div className="warn-block">
+          <p>
+            We matched this to <strong>{suggestion.formattedAddress}</strong> — does
+            that look right?
+          </p>
+          <button
+            type="button"
+            className="btn btn--warning btn--block"
+            style={{ marginTop: 10 }}
+            onClick={() => setAddressConfirmed(true)}
+          >
+            Yes, that&apos;s right
+          </button>
+          <button
+            type="button"
+            className="btn--link"
+            style={{ marginTop: 8 }}
+            onClick={invalidateSuggestion}
+          >
+            Pick a different address
+          </button>
+        </div>
+      )}
+
+      {suggestion && !needsAddressConfirmation && (
         <>
           <div className={tone.className}>
             <div className="suggest-label">{tone.label}</div>

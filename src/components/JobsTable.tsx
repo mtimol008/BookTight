@@ -236,6 +236,10 @@ export function JobsTable({
   const [currentDateOnDemandInfo, setCurrentDateOnDemandInfo] = useState<DayRoute | null>(
     null
   );
+  // Whether the user has already said "yes, that's the right address" for
+  // the CURRENT daySuggestion — reset any time a fresh one is fetched, so
+  // a re-resolved address always needs its own confirmation.
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
 
   // Set only once a within-section reorder turns out to cost meaningfully
   // more than the computed order — the drag has already happened, this
@@ -277,6 +281,7 @@ export function JobsTable({
     setShowAddressSuggestions(false);
     setDaySuggestion(null);
     setCurrentDateOnDemandInfo(null);
+    setAddressConfirmed(false);
   }
 
   function cancelEditing() {
@@ -287,6 +292,7 @@ export function JobsTable({
     setShowAddressSuggestions(false);
     setDaySuggestion(null);
     setCurrentDateOnDemandInfo(null);
+    setAddressConfirmed(false);
   }
 
   function handleAddressChange(value: string) {
@@ -376,6 +382,7 @@ export function JobsTable({
     // still the best choice before saving, rather than silently keeping a
     // now-stale day/time combination.
     setError(null);
+    setAddressConfirmed(false);
     startCheckingDay(async () => {
       try {
         const result = await getSchedulingSuggestion(
@@ -462,6 +469,7 @@ export function JobsTable({
     });
     setDaySuggestion(null);
     setCurrentDateOnDemandInfo(null);
+    setAddressConfirmed(false);
 
     startCheckingDay(async () => {
       try {
@@ -722,34 +730,54 @@ export function JobsTable({
                     ) : null;
 
                   if (editingId === job.id && editValues && daySuggestion) {
+                    const needsAddressConfirmation =
+                      daySuggestion.lowConfidenceAddress && !addressConfirmed;
                     return [
                       header,
                       <div className="stop" key={job.id}>
                         <span className="stop-dot">{stopNumber}</span>
                         <div className="stop-body">
-                          <DaySuggestionPanel
-                            suggestion={daySuggestion}
-                            jobId={job.id}
-                            distanceUnit={distanceUnit}
-                            requestedTime={{
-                              type: editValues.timeSlotType,
-                              specificTime: editValues.specificTime,
-                            }}
-                            durationMinutes={resolvedDurationMinutes(
-                              editValues.timeSlotType,
-                              editValues.durationMinutesInput
-                            )}
-                            currentDate={job.date}
-                            currentDateInfo={currentDateOnDemandInfo}
-                            requestedTimeLabel={
-                              editValues.timeSlotType === "specific" &&
-                              editValues.specificTime
-                                ? formatMinutesAsClock(parseTimeToMinutes(editValues.specificTime))
-                                : timeSlotLabel(editValues.timeSlotType)
-                            }
-                            isSaving={isSaving}
-                            onConfirm={(date, time) => doSave(job, date, time)}
-                          />
+                          {needsAddressConfirmation ? (
+                            <div className="warn-block">
+                              <p>
+                                We matched this to{" "}
+                                <strong>{daySuggestion.formattedAddress}</strong> — does
+                                that look right?
+                              </p>
+                              <button
+                                type="button"
+                                className="btn btn--warning btn--block"
+                                style={{ marginTop: 10 }}
+                                onClick={() => setAddressConfirmed(true)}
+                              >
+                                Yes, that&apos;s right
+                              </button>
+                            </div>
+                          ) : (
+                            <DaySuggestionPanel
+                              suggestion={daySuggestion}
+                              jobId={job.id}
+                              distanceUnit={distanceUnit}
+                              requestedTime={{
+                                type: editValues.timeSlotType,
+                                specificTime: editValues.specificTime,
+                              }}
+                              durationMinutes={resolvedDurationMinutes(
+                                editValues.timeSlotType,
+                                editValues.durationMinutesInput
+                              )}
+                              currentDate={job.date}
+                              currentDateInfo={currentDateOnDemandInfo}
+                              requestedTimeLabel={
+                                editValues.timeSlotType === "specific" &&
+                                editValues.specificTime
+                                  ? formatMinutesAsClock(parseTimeToMinutes(editValues.specificTime))
+                                  : timeSlotLabel(editValues.timeSlotType)
+                              }
+                              isSaving={isSaving}
+                              onConfirm={(date, time) => doSave(job, date, time)}
+                            />
+                          )}
                           <div className="btn-row" style={{ marginTop: 10 }}>
                             <button
                               type="button"

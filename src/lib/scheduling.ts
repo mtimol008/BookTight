@@ -389,6 +389,43 @@ export function haversineDistanceKm(a: Coordinates, b: Coordinates): number {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
 }
 
+const LOW_RELEVANCE_THRESHOLD = 0.8;
+const MIN_LOW_CONFIDENCE_DISTANCE_KM = 150;
+const LOW_CONFIDENCE_DISTANCE_MULTIPLIER = 3;
+
+export interface LowConfidenceGeocodeCheck {
+  relevance: number;
+  resultCoordinates: Coordinates;
+  homeCoordinates: Coordinates;
+  maxTravelRangeKm: number;
+}
+
+/**
+ * Whether a geocoded address is confident enough to save without asking the
+ * user to double-check it first. Mapbox's relevance score alone isn't
+ * enough — a wrong-continent match can still score relevance 1.0 (confirmed
+ * live: see geocoding.ts) — so this also flags a result implausibly far from
+ * the user's home/travel range, which relevance can't catch on its own. The
+ * distance threshold scales with maxTravelRangeKm (a tradesperson who
+ * already ranges wide shouldn't get flagged for a legitimately distant job)
+ * but never drops below 150 km, so a tight travel range doesn't make every
+ * slightly-further job look suspicious.
+ */
+export function isLowConfidenceGeocode({
+  relevance,
+  resultCoordinates,
+  homeCoordinates,
+  maxTravelRangeKm,
+}: LowConfidenceGeocodeCheck): boolean {
+  if (relevance < LOW_RELEVANCE_THRESHOLD) return true;
+  const distanceFromHomeKm = haversineDistanceKm(homeCoordinates, resultCoordinates);
+  const distanceThresholdKm = Math.max(
+    LOW_CONFIDENCE_DISTANCE_MULTIPLIER * maxTravelRangeKm,
+    MIN_LOW_CONFIDENCE_DISTANCE_KM
+  );
+  return distanceFromHomeKm > distanceThresholdKm;
+}
+
 /** v1 approximation: distance / assumed average speed. */
 export function estimateTravelMinutes(distanceKm: number): number {
   return (distanceKm / ASSUMED_AVERAGE_SPEED_KMH) * 60;

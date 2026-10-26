@@ -3,11 +3,13 @@
 
 import {
   compareManualOrder,
+  isLowConfidenceGeocode,
   planDayRoute,
   suggestBestDay,
   DEFAULT_SCHEDULING_PREFERENCES,
   WEEKDAY_KEYS,
   WHENEVER_LOOKAHEAD_WEEKS,
+  type Coordinates,
   type DayRoute,
   type DayTimeOption,
   type ExistingJob,
@@ -1894,5 +1896,126 @@ const NONE: JobTime = { type: "none" };
 
 // --- Scenario 50: sanity on the whenever lookahead cap --------------------
 expectEqual("scenario 50 WHENEVER_LOOKAHEAD_WEEKS is capped at 12", WHENEVER_LOOKAHEAD_WEEKS, 12);
+
+// A perfect sphere, same model haversineDistanceKm itself uses — moving
+// purely in latitude from `origin` by `km` lands at an EXACT distance of
+// `km`, not an approximation, so these scenarios can assert on precise
+// thresholds without floating-point slack.
+const GEOCODE_EARTH_RADIUS_KM = 6371;
+function pointDueNorthKm(origin: Coordinates, km: number): Coordinates {
+  const deltaLatDegrees = (km / GEOCODE_EARTH_RADIUS_KM) * (180 / Math.PI);
+  return { latitude: origin.latitude + deltaLatDegrees, longitude: origin.longitude };
+}
+
+// --- Scenario 51: relevance alone decides, independent of distance -------
+// "relevance below 0.8" triggers the guard even for a result sitting right
+// on top of home; 0.8 itself is NOT below 0.8, so it's still confident.
+{
+  const home: Coordinates = { latitude: 51.5, longitude: -0.12 };
+
+  expectTrue(
+    "scenario 51 relevance 0.79 at zero distance is still low-confidence",
+    isLowConfidenceGeocode({
+      relevance: 0.79,
+      resultCoordinates: home,
+      homeCoordinates: home,
+      maxTravelRangeKm: 50,
+    }) === true
+  );
+  expectTrue(
+    "scenario 51 relevance exactly 0.8 is NOT low-confidence (threshold is strictly below)",
+    isLowConfidenceGeocode({
+      relevance: 0.8,
+      resultCoordinates: home,
+      homeCoordinates: home,
+      maxTravelRangeKm: 50,
+    }) === false
+  );
+}
+
+// --- Scenario 52: the distance floor (150km) applies for a tight travel
+// range, not 3x a small number -------------------------------------------
+{
+  const home: Coordinates = { latitude: 51.5, longitude: -0.12 };
+  const maxTravelRangeKm = 10; // 3x this is only 30km, well under the floor
+
+  expectTrue(
+    "scenario 52 140km from home, tight travel range: under the 150km floor, confident",
+    isLowConfidenceGeocode({
+      relevance: 1,
+      resultCoordinates: pointDueNorthKm(home, 140),
+      homeCoordinates: home,
+      maxTravelRangeKm,
+    }) === false
+  );
+  expectTrue(
+    "scenario 52 160km from home, tight travel range: over the 150km floor, low-confidence",
+    isLowConfidenceGeocode({
+      relevance: 1,
+      resultCoordinates: pointDueNorthKm(home, 160),
+      homeCoordinates: home,
+      maxTravelRangeKm,
+    }) === true
+  );
+}
+
+// --- Scenario 53: a wide travel range scales the threshold past the floor
+{
+  const home: Coordinates = { latitude: 51.5, longitude: -0.12 };
+  const maxTravelRangeKm = 100; // 3x this is 300km, above the 150km floor
+
+  expectTrue(
+    "scenario 53 280km from home, wide travel range: under 3x the range, confident",
+    isLowConfidenceGeocode({
+      relevance: 1,
+      resultCoordinates: pointDueNorthKm(home, 280),
+      homeCoordinates: home,
+      maxTravelRangeKm,
+    }) === false
+  );
+  expectTrue(
+    "scenario 53 320km from home, wide travel range: over 3x the range, low-confidence",
+    isLowConfidenceGeocode({
+      relevance: 1,
+      resultCoordinates: pointDueNorthKm(home, 320),
+      homeCoordinates: home,
+      maxTravelRangeKm,
+    }) === true
+  );
+}
+
+// --- Scenario 54: either condition alone is enough to trigger the guard --
+{
+  const home: Coordinates = { latitude: 51.5, longitude: -0.12 };
+  const maxTravelRangeKm = 50; // 3x this is 150km, same as the floor
+
+  expectTrue(
+    "scenario 54 good relevance AND close distance: confident",
+    isLowConfidenceGeocode({
+      relevance: 0.95,
+      resultCoordinates: pointDueNorthKm(home, 50),
+      homeCoordinates: home,
+      maxTravelRangeKm,
+    }) === false
+  );
+  expectTrue(
+    "scenario 54 low relevance but close distance: still low-confidence",
+    isLowConfidenceGeocode({
+      relevance: 0.5,
+      resultCoordinates: pointDueNorthKm(home, 50),
+      homeCoordinates: home,
+      maxTravelRangeKm,
+    }) === true
+  );
+  expectTrue(
+    "scenario 54 good relevance but far distance: still low-confidence",
+    isLowConfidenceGeocode({
+      relevance: 0.95,
+      resultCoordinates: pointDueNorthKm(home, 200),
+      homeCoordinates: home,
+      maxTravelRangeKm,
+    }) === true
+  );
+}
 
 console.log("\nAll scheduling scenarios passed.");

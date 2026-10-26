@@ -9,6 +9,11 @@ export interface GeocodeResult {
   latitude: number;
   longitude: number;
   formattedAddress: string;
+  /** Mapbox's text-match confidence, 0-1. A cache hit has no score of its
+   *  own to report — cache writes only ever happen for addresses that
+   *  already passed looksSpecificEnoughToCache, so 1 is a fair stand-in
+   *  rather than re-fetching just to get a number. */
+  relevance: number;
 }
 
 // Permanent-mode results are explicitly allowed to be "cached and stored
@@ -91,6 +96,7 @@ async function getCachedGeocode(address: string): Promise<GeocodeResult | null> 
       latitude: row.latitude,
       longitude: row.longitude,
       formattedAddress: row.formatted_address,
+      relevance: 1,
     };
   } catch {
     return null;
@@ -223,6 +229,7 @@ export async function geocodeAddress(
     latitude,
     longitude,
     formattedAddress: feature.place_name as string,
+    relevance: (feature.relevance as number | undefined) ?? 1,
   };
 
   await setCachedGeocode(address, result);
