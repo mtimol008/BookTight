@@ -48,7 +48,9 @@ import {
   getWeekDates,
   getWeekRange,
 } from "@/lib/week";
+import { checkIpRateLimit, getClientIp } from "@/lib/rateLimit";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 export interface RequestedTime {
   type: TimeSlotType;
@@ -611,10 +613,91 @@ export async function getDayTimeSuggestion(
   return buildTimeVerdict(requestedTime, result.allDays[0], dayJobs, profile.distance_unit);
 }
 
+// Named constants, all in one place, so these are easy to retune from real
+// usage. Two tiers per key (burst + hourly) rather than one: the burst
+// window has to be generous enough that normal typing never trips it (the
+// debounce fires once per ~300ms+ pause, not per keystroke, so one full
+// address typed with natural pauses is realistically 8-15 requests, not
+// 50+), while the hourly window catches sustained abuse a loose burst
+// number alone wouldn't. IP limits cover signup too (no profile exists
+// yet there); user limits only apply once signed in.
+const AUTOCOMPLETE_IP_BURST_WINDOW_MINUTES = 1;
+const AUTOCOMPLETE_IP_BURST_MAX_REQUESTS = 60;
+const AUTOCOMPLETE_IP_HOURLY_WINDOW_MINUTES = 60;
+const AUTOCOMPLETE_IP_HOURLY_MAX_REQUESTS = 400;
+const AUTOCOMPLETE_USER_BURST_WINDOW_MINUTES = 1;
+const AUTOCOMPLETE_USER_BURST_MAX_REQUESTS = 40;
+const AUTOCOMPLETE_USER_HOURLY_WINDOW_MINUTES = 60;
+const AUTOCOMPLETE_USER_HOURLY_MAX_REQUESTS = 250;
+
+/**
+ * Rate-limited before ever reaching Mapbox — this is the one place
+ * searchAddresses is called from (NewJobForm, JobsTable, ProfileEditForm,
+ * and SignUpForm's home-address field all go through here), so it's the
+ * single choke point for autocomplete's temporary-geocoding quota.
+ *
+ * Both tiers for a key are always checked together (burst and hourly),
+ * never short-circuited on each other — otherwise a caller that always
+ * stayed just under the burst cap would never accumulate toward the
+ * hourly one, defeating its purpose. The user pair is likewise never
+ * skipped just because the IP pair already failed: autocomplete latency
+ * matters more here than saving one DB round trip, and this keeps the
+ * user's own counters accurate regardless of what the IP check decided.
+ * This is two sequential waves, not a single Promise.all of four, only
+ * because the user-keyed checks need profile.id, which isn't known until
+ * the profile fetch (kicked off in the first wave) resolves.
+ *
+ * On any limit hit: an empty array, exactly like every existing
+ * searchAddresses failure already falls back to client-side
+ * (.catch(() => setAddressSuggestions([]))) — no new UI state, and the
+ * save path (geocodeAddress, with its own separate daily cap) never goes
+ * through this function, so typing a full address by hand and submitting
+ * is unaffected either way.
+ */
 export async function getAddressSuggestions(
   query: string
 ): Promise<AddressSuggestion[]> {
-  const profile = await getCurrentProfile();
+  const ip = getClientIp(await headers());
+
+  const [ipBurstAllowed, ipHourlyAllowed, profile] = await Promise.all([
+    checkIpRateLimit(
+      ip,
+      "autocomplete_ip_burst",
+      AUTOCOMPLETE_IP_BURST_WINDOW_MINUTES,
+      AUTOCOMPLETE_IP_BURST_MAX_REQUESTS
+    ),
+    checkIpRateLimit(
+      ip,
+      "autocomplete_ip_hourly",
+      AUTOCOMPLETE_IP_HOURLY_WINDOW_MINUTES,
+      AUTOCOMPLETE_IP_HOURLY_MAX_REQUESTS
+    ),
+    getCurrentProfile(),
+  ]);
+
+  let userAllowed = true;
+  if (profile) {
+    const [userBurstAllowed, userHourlyAllowed] = await Promise.all([
+      checkIpRateLimit(
+        profile.id,
+        "autocomplete_user_burst",
+        AUTOCOMPLETE_USER_BURST_WINDOW_MINUTES,
+        AUTOCOMPLETE_USER_BURST_MAX_REQUESTS
+      ),
+      checkIpRateLimit(
+        profile.id,
+        "autocomplete_user_hourly",
+        AUTOCOMPLETE_USER_HOURLY_WINDOW_MINUTES,
+        AUTOCOMPLETE_USER_HOURLY_MAX_REQUESTS
+      ),
+    ]);
+    userAllowed = userBurstAllowed && userHourlyAllowed;
+  }
+
+  if (!ipBurstAllowed || !ipHourlyAllowed || !userAllowed) {
+    return [];
+  }
+
   if (!profile) {
     return searchAddresses(query);
   }
