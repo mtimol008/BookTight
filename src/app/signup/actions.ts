@@ -3,12 +3,22 @@
 import { geocodeAddress } from "@/lib/geocoding";
 import { createClient } from "@/lib/supabase/server";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { checkIpRateLimit, getClientIp } from "@/lib/rateLimit";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 export interface SignUpState {
   error?: string;
   message?: string;
 }
+
+// Defense-in-depth alongside Turnstile, not a replacement for it — Turnstile
+// stops a scripted bot outright, this stops the same real IP from
+// retrying past a captcha-solving farm or a human abuser indefinitely. See
+// login/actions.ts for why an app-level IP limit is needed here at all
+// (Supabase's own per-IP limit sees Vercel's IP, not the visitor's).
+const SIGNUP_RATE_LIMIT_WINDOW_MINUTES = 5;
+const SIGNUP_RATE_LIMIT_MAX_ATTEMPTS = 8;
 
 export async function signUp(
   _prevState: SignUpState,
@@ -29,6 +39,19 @@ export async function signUp(
 
   if (password !== confirmPassword) {
     return { error: "Passwords do not match." };
+  }
+
+  // Cheapest check first — an IP that's already over the cap never even
+  // reaches the Turnstile verification call.
+  const ip = getClientIp(await headers());
+  const allowed = await checkIpRateLimit(
+    ip,
+    "signup",
+    SIGNUP_RATE_LIMIT_WINDOW_MINUTES,
+    SIGNUP_RATE_LIMIT_MAX_ATTEMPTS
+  );
+  if (!allowed) {
+    return { error: "Too many attempts. Please try again in a few minutes." };
   }
 
   // Must run before the geocode call and before auth.signUp — both cost

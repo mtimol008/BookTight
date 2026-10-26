@@ -1,7 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkIpRateLimit, getClientIp } from "@/lib/rateLimit";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 export interface LoginState {
   error?: string;
@@ -14,7 +16,15 @@ export interface LoginState {
 // on /auth/v1/token (password sign-in) already covers brute-force/bot
 // attempts here: 150 requests per 5 minutes per IP, burst up to 30,
 // returning 429 once exceeded (confirmed against Supabase's current docs,
-// supabase.com/docs/guides/auth/rate-limits).
+// supabase.com/docs/guides/auth/rate-limits) — EXCEPT that limit is keyed
+// on the request's own IP, which for every Booktight request is Vercel's
+// server IP, not the real visitor's (this app still uses the legacy
+// Supabase key pair, which Sb-Forwarded-For doesn't support — see
+// rateLimit.ts). The app-level per-IP check below is the fix for that:
+// tighter than Supabase's pooled limit, scoped to the real visitor.
+const LOGIN_RATE_LIMIT_WINDOW_MINUTES = 5;
+const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 15;
+
 export async function signIn(
   _prevState: LoginState,
   formData: FormData
@@ -24,6 +34,17 @@ export async function signIn(
 
   if (!email || !password) {
     return { error: "Email and password are both required." };
+  }
+
+  const ip = getClientIp(await headers());
+  const allowed = await checkIpRateLimit(
+    ip,
+    "login",
+    LOGIN_RATE_LIMIT_WINDOW_MINUTES,
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+  );
+  if (!allowed) {
+    return { error: "Too many attempts. Please try again in a few minutes." };
   }
 
   const supabase = await createClient();
