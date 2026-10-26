@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { createAdminClient } from "./supabase/admin";
 import { isRateLimitDisabled } from "./rateLimitConfig";
 
@@ -29,7 +30,14 @@ export function getClientIp(headers: Headers): string {
  * Fails open on any DB error — a transient outage shouldn't itself lock
  * every visitor out of login/signup/forgot-password; this is an abuse
  * backstop, not a hard gate that's allowed to become a new single point
- * of failure for the thing it's protecting.
+ * of failure for the thing it's protecting. Still reported to Sentry
+ * either way (a silent fail-open is a silent loss of the protection this
+ * exists for) — the error branch uses captureMessage with the detail in
+ * tags/extra rather than the message itself, since scrubEvent redacts
+ * event.message unconditionally (see sentryScrub.ts); the catch branch
+ * uses captureException as normal, since scrubEvent already handles that
+ * case project-wide (keeps the exception type and stack, drops the
+ * message text).
  */
 export async function checkIpRateLimit(
   ip: string,
@@ -47,9 +55,17 @@ export async function checkIpRateLimit(
       p_window_minutes: windowMinutes,
       p_limit: limit,
     });
-    if (error) return true;
+    if (error) {
+      Sentry.captureMessage("ip_rate_limit check failed, failing open", {
+        level: "error",
+        tags: { rateLimitAction: action },
+        extra: { supabaseError: error.message },
+      });
+      return true;
+    }
     return data !== false;
-  } catch {
+  } catch (err) {
+    Sentry.captureException(err, { tags: { rateLimitAction: action } });
     return true;
   }
 }
