@@ -20,6 +20,7 @@ const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
 const PUBLIC_PATHS = [
   ...AUTH_PAGES,
   "/api/calendar/feed",
+  "/api/health",
   "/email-confirmed",
   "/reset-password",
 ];
