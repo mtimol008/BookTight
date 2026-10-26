@@ -38,9 +38,9 @@ This app is ready to deploy on Vercel or any platform that supports Next.js App 
 Copy `.env.local.example` to `.env.local` and fill in your values:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `NEXT_PUBLIC_APP_URL` (the public URL for the deployed app, e.g. `https://your-team.vercel.app`)
-- `SUPABASE_SERVICE_ROLE_KEY` (server-only, not exposed to the browser)
+- `SUPABASE_SECRET_KEY` (server-only, not exposed to the browser)
 - `MAPBOX_ACCESS_TOKEN`
 
 ### Build locally

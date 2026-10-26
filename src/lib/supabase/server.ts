@@ -30,18 +30,18 @@ export async function withAuthRetry<T>(
 // the current request's cookies, so it can't be a shared module-level client.
 export async function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabasePublishableKey) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. " +
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY. " +
         "Copy .env.local.example to .env.local and fill in your project's values."
     );
   }
 
   const cookieStore = await cookies();
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  return createServerClient(supabaseUrl, supabasePublishableKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
