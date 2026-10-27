@@ -32,6 +32,8 @@ export async function signUp(
   const homeAddress = formData.get("homeAddress")?.toString().trim() ?? "";
   const timezone = formData.get("timezone")?.toString().trim() || undefined;
   const turnstileToken = formData.get("turnstileToken")?.toString() ?? null;
+  const termsAccepted = formData.get("termsAccepted")?.toString() === "on";
+  const termsVersion = formData.get("termsVersion")?.toString().trim() || undefined;
 
   if (!fullName || !email || !password || !confirmPassword || !homeAddress) {
     return { error: "Full name, email, password, confirmation, and home address are all required." };
@@ -39,6 +41,12 @@ export async function signUp(
 
   if (password !== confirmPassword) {
     return { error: "Passwords do not match." };
+  }
+
+  // Server-side, not just the submit button's disabled state — a modified
+  // client could strip the checkbox's required attribute and submit anyway.
+  if (!termsAccepted) {
+    return { error: "You must agree to the Terms of Service and Privacy Policy to create an account." };
   }
 
   // Cheapest check first — an IP that's already over the cap never even
@@ -93,6 +101,7 @@ export async function signUp(
         // the handle_new_user trigger's own coalesce(..., 'UTC') covers
         // that case.
         timezone,
+        terms_version: termsVersion,
       },
     },
   });

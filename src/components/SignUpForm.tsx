@@ -6,6 +6,7 @@ import { getAddressSuggestions } from "@/app/actions";
 import { EyeIcon, EyeOffIcon, PinIcon } from "@/components/icons";
 import { Turnstile } from "@/components/Turnstile";
 import { isTurnstileDisabled } from "@/lib/turnstileConfig";
+import { TERMS_VERSION } from "@/lib/terms";
 import type { AddressSuggestion } from "@/lib/geocoding";
 
 const initialState: SignUpState = {};
@@ -46,6 +47,7 @@ export function SignUpForm() {
   const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileDisabled = isTurnstileDisabled();
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   function handleAddressChange(value: string) {
     setHomeAddress(value);
@@ -77,6 +79,7 @@ export function SignUpForm() {
     <form action={formAction}>
       <input type="hidden" name="timezone" value={timezone} />
       <input type="hidden" name="turnstileToken" value={turnstileToken ?? ""} />
+      <input type="hidden" name="termsVersion" value={TERMS_VERSION} />
       <div className="field">
         <label className="field-label" htmlFor="signup-name">
           Full name
@@ -218,6 +221,28 @@ export function SignUpForm() {
         <p className="error-text">Passwords do not match.</p>
       )}
 
+      <label className="field" style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+        <input
+          type="checkbox"
+          name="termsAccepted"
+          required
+          checked={termsAccepted}
+          onChange={(e) => setTermsAccepted(e.target.checked)}
+          style={{ marginTop: 3 }}
+        />
+        <span className="note" style={{ margin: 0 }}>
+          I agree to the{" "}
+          <a href="/terms" target="_blank" rel="noopener noreferrer">
+            Terms of Service
+          </a>{" "}
+          and{" "}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer">
+            Privacy Policy
+          </a>
+          .
+        </span>
+      </label>
+
       {!turnstileDisabled && <Turnstile onToken={setTurnstileToken} />}
 
       {state.error && <p className="error-text">{state.error}</p>}
@@ -226,7 +251,7 @@ export function SignUpForm() {
       <button
         type="submit"
         className="btn btn--primary btn--block"
-        disabled={isPending || (!turnstileDisabled && !turnstileToken)}
+        disabled={isPending || !termsAccepted || (!turnstileDisabled && !turnstileToken)}
       >
         {isPending ? "Creating account..." : "Create Account"}
       </button>

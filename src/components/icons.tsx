@@ -149,6 +149,16 @@ export function ExternalLinkIcon() {
   );
 }
 
+export function DownloadIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 3v12" />
+      <polyline points="7 10 12 15 17 10" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  );
+}
+
 /** Password visible — click to hide. */
 export function EyeIcon() {
   return (

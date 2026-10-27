@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { CalendarFeedSection } from "@/components/CalendarFeed";
 import {
   ClockIcon,
+  DownloadIcon,
   ForwardIcon,
   LockIcon,
   MailIcon,
@@ -12,6 +13,7 @@ import {
   TargetIcon,
   TrashIcon,
 } from "@/components/icons";
+import { Footer } from "@/components/Footer";
 import { signOut } from "@/app/login/actions";
 import type { CalendarFeedState } from "@/app/account/calendar-feed/actions";
 import { getCurrentProfileWithUser } from "@/lib/profiles";
@@ -226,6 +228,45 @@ export default async function AccountPage({
         </Link>
       </div>
 
+      <div className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
+        Your Data
+      </div>
+      <div className="card">
+        <a href="/api/account/export?type=json" className="summary-row">
+          <span className="summary-row-icon">
+            <DownloadIcon />
+          </span>
+          <span className="summary-row-body">
+            <span className="summary-row-label">All data (JSON)</span>
+          </span>
+          <span className="summary-row-chevron">
+            <ForwardIcon />
+          </span>
+        </a>
+        <a href="/api/account/export?type=jobs-csv" className="summary-row">
+          <span className="summary-row-icon">
+            <DownloadIcon />
+          </span>
+          <span className="summary-row-body">
+            <span className="summary-row-label">Jobs (CSV)</span>
+          </span>
+          <span className="summary-row-chevron">
+            <ForwardIcon />
+          </span>
+        </a>
+        <a href="/api/account/export?type=profile-csv" className="summary-row">
+          <span className="summary-row-icon">
+            <DownloadIcon />
+          </span>
+          <span className="summary-row-body">
+            <span className="summary-row-label">Profile (CSV)</span>
+          </span>
+          <span className="summary-row-chevron">
+            <ForwardIcon />
+          </span>
+        </a>
+      </div>
+
       <form action={signOut} style={{ marginTop: 20 }}>
         <button
           type="submit"
@@ -238,6 +279,7 @@ export default async function AccountPage({
 
       <CalendarFeedSection initialFeedState={initialFeedState} />
 
+      <Footer />
       <p className="version">v1.0.2-stable</p>
     </AppShell>
   );

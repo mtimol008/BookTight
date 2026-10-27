@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SignUpForm } from "@/components/SignUpForm";
+import { Footer } from "@/components/Footer";
 
 export default function SignUpPage() {
   return (
@@ -21,6 +22,7 @@ export default function SignUpPage() {
         </Link>
       </p>
 
+      <Footer />
       <p className="version">v1.0.2-stable</p>
     </main>
   );

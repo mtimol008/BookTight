@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Footer } from "@/components/Footer";
 
 export default function EmailConfirmedPage() {
   return (
@@ -26,6 +27,7 @@ export default function EmailConfirmedPage() {
         </Link>
       </p>
 
+      <Footer />
       <p className="version">v1.0.2-stable</p>
     </main>
   );

@@ -55,6 +55,27 @@ export async function getJobsForWeek(
 }
 
 /**
+ * Every job the account has ever booked, any status, unscoped by date —
+ * for the data-export feature, where "export your data" means everything,
+ * not just the active route. Unlike getJobsForWeek, cancelled jobs stay in
+ * (an export that silently dropped them would misrepresent the account's
+ * own history).
+ */
+export async function getAllJobsForCurrentUser(): Promise<JobRecord[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await withAuthRetry(() =>
+    supabase.from("jobs").select("*").order("date", { ascending: true })
+  );
+
+  if (error) {
+    throw new Error(`Failed to fetch jobs: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+/**
  * All-time job count, any status, unscoped by date — deliberately NOT
  * "jobs this week", which is normal and often zero even for an account in
  * active use. Used to tell a genuinely new account (never once used Add a

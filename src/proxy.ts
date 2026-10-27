@@ -24,6 +24,12 @@ const PUBLIC_PATHS = [
   "/api/csp-report",
   "/email-confirmed",
   "/reset-password",
+  // Legal/support pages — reachable whether signed in or out, same idea as
+  // /reset-password above (not AUTH_PAGES: a logged-in user should still be
+  // able to read these, unlike /login or /signup).
+  "/contact",
+  "/privacy",
+  "/terms",
 ];
 
 export async function proxy(request: NextRequest) {

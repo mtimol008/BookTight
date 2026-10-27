@@ -1,4 +1,5 @@
 import { ResetPasswordForm } from "@/components/ResetPasswordForm";
+import { Footer } from "@/components/Footer";
 
 export default function ResetPasswordPage() {
   return (
@@ -15,6 +16,7 @@ export default function ResetPasswordPage() {
         <ResetPasswordForm />
       </div>
 
+      <Footer />
       <p className="version">v1.0.2-stable</p>
     </main>
   );

@@ -47,6 +47,10 @@ export interface ProfileRecord {
   calendar_feed_enabled: boolean;
   created_at: string;
   engagement_state: EngagementState;
+  /** null = predates the terms checkbox, or the trigger ran without it. */
+  terms_accepted_at: string | null;
+  /** Which TERMS_VERSION (src/lib/terms.ts) the account agreed to. */
+  terms_version: string | null;
 }
 
 export async function getCurrentProfile(): Promise<ProfileRecord | null> {

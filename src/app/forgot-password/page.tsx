@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ForgotPasswordForm } from "@/components/ForgotPasswordForm";
+import { Footer } from "@/components/Footer";
 
 export default function ForgotPasswordPage() {
   return (
@@ -25,6 +26,7 @@ export default function ForgotPasswordPage() {
         </Link>
       </p>
 
+      <Footer />
       <p className="version">v1.0.2-stable</p>
     </main>
   );
