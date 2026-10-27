@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { syncTimezoneIfDefault } from "@/app/account/actions";
 import { getEngagementState, markTourShown } from "@/app/actions";
 import { EngagementProvider } from "@/components/EngagementProvider";
@@ -66,6 +66,33 @@ export function AppShell({ children }: { children: ReactNode }) {
   // arrives, never crash on a missing context value.
   const [engagementState, setEngagementState] = useState<EngagementState>({});
   const [showTour, setShowTour] = useState(false);
+  // Set while the tour wants to show but a field had focus at the moment
+  // it would have appeared — consumed (and cleared) once it actually
+  // shows, so a stray late timer can't re-trigger it after that.
+  const tourPendingRef = useRef(false);
+  const tourPendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Account screens are all forms (edit profile, security, business
+  // rules...) — a nav tour popping up mid-edit there is only ever an
+  // interruption, never useful. Skipping it here doesn't lose it: tourShown
+  // stays false server-side until dismissed, so it simply shows the next
+  // time this account visits Week, Add or Calendar instead.
+  const tourExcludedOnThisPage =
+    pathname === "/account" || pathname.startsWith("/account/");
+
+  // Only shows the tour if no field is focused and nothing else (e.g.
+  // AhaMomentModal) is already on screen — called both right away (if
+  // nothing's in the way yet) and after a pending tour's post-blur delay.
+  function showTourIfClear() {
+    if (
+      document.body.dataset.fieldFocused === "true" ||
+      document.querySelector(".modal-backdrop")
+    ) {
+      return;
+    }
+    tourPendingRef.current = false;
+    setShowTour(true);
+  }
 
   // First real entry into the app, regardless of which /welcome choice
   // was made: the tour only ever fires once, whenever this next fires
@@ -76,15 +103,22 @@ export function AppShell({ children }: { children: ReactNode }) {
     getEngagementState()
       .then((state) => {
         setEngagementState(state);
-        if (!state.tourShown) {
-          setShowTour(true);
+        if (state.tourShown || tourExcludedOnThisPage) {
+          return;
+        }
+        if (document.body.dataset.fieldFocused === "true") {
+          tourPendingRef.current = true;
+        } else {
+          showTourIfClear();
         }
       })
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function dismissTour() {
     setShowTour(false);
+    tourPendingRef.current = false;
     setEngagementState((current) => ({ ...current, tourShown: true }));
     markTourShown().catch(() => {});
   }
@@ -103,8 +137,26 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
     };
     const onFocusOut = (event: FocusEvent) => {
-      if (isField(event.target)) {
-        delete document.body.dataset.fieldFocused;
+      if (!isField(event.target)) {
+        return;
+      }
+      delete document.body.dataset.fieldFocused;
+
+      // A tour was waiting for this field (or another one) to free up.
+      // Don't show it the instant focus leaves — give the UI a moment to
+      // settle (e.g. an address suggestion turning into a confirm step)
+      // and re-check right before showing, since a lot can change in
+      // 800ms.
+      if (tourPendingRef.current) {
+        if (tourPendingTimeoutRef.current !== null) {
+          clearTimeout(tourPendingTimeoutRef.current);
+        }
+        tourPendingTimeoutRef.current = setTimeout(() => {
+          tourPendingTimeoutRef.current = null;
+          if (tourPendingRef.current) {
+            showTourIfClear();
+          }
+        }, 800);
       }
     };
 
@@ -114,6 +166,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
       delete document.body.dataset.fieldFocused;
+      if (tourPendingTimeoutRef.current !== null) {
+        clearTimeout(tourPendingTimeoutRef.current);
+      }
     };
   }, []);
 
