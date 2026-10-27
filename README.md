@@ -107,4 +107,13 @@ Two steps, **in this order** — reversing them means some accounts' trials star
 
    This covers every account that existed before this point, including ones that signed up between the `subscriptions` migration landing and today (their trigger-set `trial_ends_at` gets overwritten here too) — "existing accounts' trial starts the day the paywall switches on" means *this* moment, not whenever each of them happened to sign up.
 
-2. **Only after that's run**, set `PAYWALL_ENABLED=true` in Vercel (Production) and redeploy. Before this, `hasActiveEntitlement()` always returns `true` regardless of what's in `subscriptions` — the whole system can sit there inert, including new signups quietly accumulating a real `trial_ends_at` from the moment the migration ran, with zero effect until this flag flips.
+2. **Only after that's run**, set `PAYWALL_ENABLED=true` in Vercel (Production), then **redeploy** — this is a server-only env var read at request time, not build time, but Vercel only picks up a changed env var on the next deploy, not on existing running instances. Before this, `hasActiveEntitlement()` always returns `true` regardless of what's in `subscriptions` — the whole system can sit there inert, including new signups quietly accumulating a real `trial_ends_at` from the moment the migration ran, with zero effect until this flag flips.
+
+### Going live (switching Stripe from test mode to live)
+
+Everything up to this point — the Product, both Prices, the webhook endpoint, and the Customer Portal configuration — was created in Stripe **test mode**, using `sk_test_...` keys. None of it carries over automatically: test mode and live mode are two separate, parallel sets of objects in the same Stripe account, so each of these needs recreating once you're ready to actually charge real cards:
+
+1. Switch to live mode in the Stripe Dashboard, then re-run `node scripts/create-stripe-prices.mjs` and `node scripts/create-stripe-webhook.mjs` — both scripts refuse to run against anything but an `sk_test_...` key today, so update that guard (or just run the underlying Stripe calls by hand) once you're intentionally doing this for live mode.
+2. Re-apply the same Customer Portal settings (cancellation, payment methods, invoice history, business info, links to `/terms`/`/privacy`) in live mode — the Dashboard's test and live mode portal configurations are separate too.
+3. Swap all four vars in Vercel (Production **and** Preview) to their live-mode values: `STRIPE_SECRET_KEY` (`sk_live_...`), `STRIPE_WEBHOOK_SECRET` (the live endpoint's own signing secret), `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_YEARLY` (the live Price IDs from step 1).
+4. Redeploy.

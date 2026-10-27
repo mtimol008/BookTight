@@ -23,6 +23,10 @@ const required = [
   "NEXT_PUBLIC_APP_URL",
   "SUPABASE_SECRET_KEY",
   "MAPBOX_ACCESS_TOKEN",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "STRIPE_PRICE_ID_MONTHLY",
+  "STRIPE_PRICE_ID_YEARLY",
 ];
 
 // Turnstile verification is skipped entirely when the kill switch is on
