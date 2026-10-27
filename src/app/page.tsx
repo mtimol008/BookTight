@@ -14,6 +14,7 @@ import {
 } from "@/lib/jobs";
 import { getCurrentProfile } from "@/lib/profiles";
 import { planDayRoute, type ExistingJob, type TimeSlotType } from "@/lib/scheduling";
+import { TERMS_VERSION } from "@/lib/terms";
 import {
   getCurrentWeekRange,
   getTodayDateString,
@@ -119,12 +120,18 @@ export default async function Home() {
   ]);
 
   // The one entry point sign-in already redirects to — gating here (rather
-  // than on every route) means onboarding always runs before the app
-  // proper, without needing a guard on every single page. Same reasoning
-  // extends to the post-onboarding entry choice: every existing account
-  // defaults to entryChoiceMade being unset too (nothing backfills it —
-  // see the engagement_state migration), so this rolls out uniformly
-  // rather than only to new signups.
+  // than on every route) means onboarding, and re-accepting updated terms,
+  // always run before the app proper, without needing a guard on every
+  // single page. Checked first: every existing account predates the terms
+  // checkbox (terms_version is null), so this is what actually catches
+  // them — not just future version bumps. Same reasoning extends to the
+  // post-onboarding entry choice below: every existing account defaults to
+  // entryChoiceMade being unset too (nothing backfills it — see the
+  // engagement_state migration), so this rolls out uniformly rather than
+  // only to new signups.
+  if (profile && profile.terms_version !== TERMS_VERSION) {
+    redirect("/accept-terms");
+  }
   if (profile && !profile.onboarding_completed_at) {
     redirect("/onboarding");
   }

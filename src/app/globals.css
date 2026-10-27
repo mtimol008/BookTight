@@ -342,6 +342,38 @@ body[data-field-focused="true"] .fab {
   text-decoration: underline;
 }
 
+/* -------------------------------------------------------- legal documents */
+
+.legal-meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+
+.legal-doc h2 {
+  font-family: var(--font-oswald), sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 24px 0 8px;
+}
+
+.legal-doc h2:first-child {
+  margin-top: 0;
+}
+
+.legal-doc p {
+  margin: 0 0 12px;
+}
+
+.legal-doc ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.legal-doc li {
+  margin-bottom: 6px;
+}
+
 /* ---------------------------------------------------------------- cards */
 
 .card {
