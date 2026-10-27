@@ -80,13 +80,15 @@ export default async function BillingPage({
               </button>
             </form>
           </>
+        ) : subscription.comped_until && new Date(subscription.comped_until) > new Date() ? (
+          // Comped: no subscribe nag at all — this account doesn't need to
+          // pay, full stop, not just "doesn't need to yet".
+          <p>
+            Free until <strong>{formatDate(subscription.comped_until)}</strong>.
+          </p>
         ) : (
           <>
-            {subscription.comped_until && new Date(subscription.comped_until) > new Date() ? (
-              <p>
-                Comped until <strong>{formatDate(subscription.comped_until)}</strong>.
-              </p>
-            ) : trialActive ? (
+            {trialActive ? (
               <p>
                 Free trial — ends <strong>{formatDate(subscription.trial_ends_at!)}</strong>.
               </p>

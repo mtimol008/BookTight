@@ -1034,6 +1034,14 @@ export async function getBillingBannerState(): Promise<BillingBannerState | null
     return null;
   }
 
+  // Comped overrides everything here, same priority order as
+  // hasActiveEntitlement/lapsedSince — an account comped after signup,
+  // whose original trial_ends_at happens to still fall within the banner
+  // window, must not see a nag it doesn't actually need to act on.
+  if (subscription.comped_until && new Date(subscription.comped_until) > new Date()) {
+    return { trialEndsAt: null, paymentFailed: false };
+  }
+
   const now = Date.now();
   const trialActive =
     !!subscription.trial_ends_at &&
