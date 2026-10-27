@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { CalendarFeedSection } from "@/components/CalendarFeed";
 import {
+  CardIcon,
   ClockIcon,
   DownloadIcon,
   ForwardIcon,
@@ -208,6 +209,17 @@ export default async function AccountPage({
           <span className="summary-row-body">
             <span className="summary-row-label">Password</span>
             <span className="summary-row-value">••••••••</span>
+          </span>
+          <span className="summary-row-chevron">
+            <ForwardIcon />
+          </span>
+        </Link>
+        <Link href="/billing" className="summary-row">
+          <span className="summary-row-icon">
+            <CardIcon />
+          </span>
+          <span className="summary-row-body">
+            <span className="summary-row-label">Billing</span>
           </span>
           <span className="summary-row-chevron">
             <ForwardIcon />

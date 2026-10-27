@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { syncTimezoneIfDefault } from "@/app/account/actions";
-import { getEngagementState, markTourShown } from "@/app/actions";
+import { getEngagementState, getBillingBannerState, markTourShown, type BillingBannerState } from "@/app/actions";
 import { EngagementProvider } from "@/components/EngagementProvider";
 import { NavTour } from "@/components/NavTour";
 import type { EngagementState } from "@/lib/profiles";
@@ -66,6 +66,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // arrives, never crash on a missing context value.
   const [engagementState, setEngagementState] = useState<EngagementState>({});
   const [showTour, setShowTour] = useState(false);
+  const [billingBanner, setBillingBanner] = useState<BillingBannerState | null>(null);
+  const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
   // Set while the tour wants to show but a field had focus at the moment
   // it would have appeared — consumed (and cleared) once it actually
   // shows, so a stray late timer can't re-trigger it after that.
@@ -180,9 +182,38 @@ export function AppShell({ children }: { children: ReactNode }) {
     syncTimezoneIfDefault(Intl.DateTimeFormat().resolvedOptions().timeZone).catch(() => {});
   }, []);
 
+  // Trial-ending / payment-failed banner — null (no fetch cost beyond one
+  // cheap query) while the paywall itself is off, same reasoning as
+  // getBillingBannerState's own early return. trialDaysLeft is computed
+  // here, once, rather than from Date.now() during render — components
+  // must stay pure, and "now" isn't.
+  useEffect(() => {
+    getBillingBannerState()
+      .then((state) => {
+        setBillingBanner(state);
+        setTrialDaysLeft(
+          state?.trialEndsAt
+            ? Math.max(1, Math.ceil((new Date(state.trialEndsAt).getTime() - Date.now()) / 86400000))
+            : null
+        );
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <EngagementProvider initialState={engagementState}>
-      <main className="shell">{children}</main>
+      <main className="shell">
+        {billingBanner?.paymentFailed ? (
+          <Link href="/billing" className="billing-banner billing-banner--warning">
+            Your last payment failed — update your card
+          </Link>
+        ) : trialDaysLeft !== null ? (
+          <Link href="/billing" className="billing-banner">
+            {trialDaysLeft === 1 ? "Your trial ends tomorrow" : `Your trial ends in ${trialDaysLeft} days`} — subscribe
+          </Link>
+        ) : null}
+        {children}
+      </main>
       <nav className="nav">
         {NAV.map(({ href, label, Icon }) => {
           const isActive =

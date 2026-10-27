@@ -94,3 +94,17 @@ npx supabase db push --project-ref itijkrefaugbpagamxqr
 ```
 
 If anything in step 2 looks wrong — more than the expected migration(s) listed, or output that doesn't match the file you just wrote — stop and investigate before running step 3.
+
+### Switching on the paywall
+
+Two steps, **in this order** — reversing them means some accounts' trials start before others', instead of everyone's starting together on the same day:
+
+1. **Run this once, by hand, in the Supabase SQL Editor** — sets every existing account's trial to start right now:
+
+   ```sql
+   update public.subscriptions set trial_ends_at = now() + interval '14 days';
+   ```
+
+   This covers every account that existed before this point, including ones that signed up between the `subscriptions` migration landing and today (their trigger-set `trial_ends_at` gets overwritten here too) — "existing accounts' trial starts the day the paywall switches on" means *this* moment, not whenever each of them happened to sign up.
+
+2. **Only after that's run**, set `PAYWALL_ENABLED=true` in Vercel (Production) and redeploy. Before this, `hasActiveEntitlement()` always returns `true` regardless of what's in `subscriptions` — the whole system can sit there inert, including new signups quietly accumulating a real `trial_ends_at` from the moment the migration ran, with zero effect until this flag flips.

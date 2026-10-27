@@ -30,6 +30,10 @@ const PUBLIC_PATHS = [
   "/contact",
   "/privacy",
   "/terms",
+  // Stripe's servers POST here with no Supabase session at all — same
+  // category as the calendar feed, authenticated by its own signature
+  // instead (verified inside the route itself).
+  "/api/stripe/webhook",
 ];
 
 export async function proxy(request: NextRequest) {

@@ -374,6 +374,26 @@ body[data-field-focused="true"] .fab {
   margin-bottom: 6px;
 }
 
+/* --------------------------------------------------------- billing banner */
+
+.billing-banner {
+  display: block;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+  background: var(--tint-warning);
+  color: var(--warning);
+  text-decoration: none;
+}
+
+.billing-banner--warning {
+  background: var(--warning);
+  color: #fff;
+}
+
 /* ---------------------------------------------------------------- cards */
 
 .card {

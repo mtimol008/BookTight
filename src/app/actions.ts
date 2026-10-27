@@ -12,6 +12,9 @@ import {
   type JobRecord,
 } from "@/lib/jobs";
 import { getCurrentProfile, type EngagementState, type ProfileRecord } from "@/lib/profiles";
+import { getCurrentSubscription } from "@/lib/subscriptions";
+import { hasActiveEntitlement, READ_ONLY_MESSAGE } from "@/lib/entitlement";
+import { isPaywallEnabled } from "@/lib/paywallConfig";
 import { updateEngagementState } from "@/lib/engagement";
 import {
   compareManualOrder,
@@ -805,6 +808,10 @@ export async function confirmAndSaveJob(
 ): Promise<AhaMomentPayload | null> {
   validateJobFields(input);
 
+  if (!hasActiveEntitlement(await getCurrentSubscription())) {
+    throw new Error(READ_ONLY_MESSAGE);
+  }
+
   // The user's own today, not the server's — see nowForScheduling. Falls
   // back to the server-local date only in the unexpected case of no
   // profile (RLS would already have refused the insert below regardless).
@@ -864,6 +871,10 @@ export async function updateExistingJob(
   input: UpdateJobFormInput
 ): Promise<AhaMomentPayload | null> {
   validateJobFields(input);
+
+  if (!hasActiveEntitlement(await getCurrentSubscription())) {
+    throw new Error(READ_ONLY_MESSAGE);
+  }
 
   // Only reject a date that's actually changing to a past one — a job
   // already sitting on an earlier date this week (not yet reviewed) still
@@ -951,10 +962,15 @@ export async function getManualOrderImpact(
 
 /** Persists a within-section drag-reorder once confirmed. */
 export async function saveManualOrder(proposedOrder: string[]): Promise<void> {
+  if (!hasActiveEntitlement(await getCurrentSubscription())) {
+    throw new Error(READ_ONLY_MESSAGE);
+  }
   await setManualPositions(proposedOrder.map((id, index) => ({ id, position: index })));
   revalidatePath("/");
 }
 
+// Deliberately NOT entitlement-gated — a lapsed account must still be able
+// to delete jobs (see src/lib/entitlement.ts's own comment on this).
 export async function deleteExistingJob(id: string): Promise<void> {
   await deleteJob(id);
   revalidatePath("/");
@@ -962,6 +978,9 @@ export async function deleteExistingJob(id: string): Promise<void> {
 
 /** End-of-day review: the jobs that got done. */
 export async function markJobsCompleted(ids: string[]): Promise<void> {
+  if (!hasActiveEntitlement(await getCurrentSubscription())) {
+    throw new Error(READ_ONLY_MESSAGE);
+  }
   await setJobStatuses(ids, "completed");
   revalidatePath("/");
   revalidatePath("/review", "layout");
@@ -973,6 +992,9 @@ export async function markJobsCompleted(ids: string[]): Promise<void> {
  * stays recoverable if an undo is ever wanted.
  */
 export async function markJobCancelled(id: string): Promise<void> {
+  if (!hasActiveEntitlement(await getCurrentSubscription())) {
+    throw new Error(READ_ONLY_MESSAGE);
+  }
   await setJobStatuses([id], "cancelled");
   revalidatePath("/");
   revalidatePath("/review", "layout");
@@ -986,6 +1008,46 @@ export async function markJobCancelled(id: string): Promise<void> {
 export async function getEngagementState(): Promise<EngagementState> {
   const profile = await getCurrentProfile();
   return profile?.engagement_state ?? {};
+}
+
+// ------------------------------------------------------------------ billing
+
+export interface BillingBannerState {
+  /** Set only once the trial is within a few days of ending — not for the
+   *  whole 14-day span, so this isn't a nag from day one. */
+  trialEndsAt: string | null;
+  paymentFailed: boolean;
+}
+
+const TRIAL_BANNER_WINDOW_DAYS = 3;
+
+/** Fetched once by AppShell, same pattern as getEngagementState — null
+ *  while the paywall itself is off, since a trial deadline with no actual
+ *  consequence yet would just be confusing to show. */
+export async function getBillingBannerState(): Promise<BillingBannerState | null> {
+  if (!isPaywallEnabled()) {
+    return null;
+  }
+
+  const subscription = await getCurrentSubscription();
+  if (!subscription) {
+    return null;
+  }
+
+  const now = Date.now();
+  const trialActive =
+    !!subscription.trial_ends_at &&
+    !subscription.stripe_subscription_id &&
+    new Date(subscription.trial_ends_at).getTime() > now;
+  const trialEndingSoon =
+    trialActive &&
+    new Date(subscription.trial_ends_at!).getTime() - now <
+      TRIAL_BANNER_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  return {
+    trialEndsAt: trialEndingSoon ? subscription.trial_ends_at : null,
+    paymentFailed: subscription.status === "past_due",
+  };
 }
 
 /** The post-onboarding "add a job now" vs "show me around" choice was
