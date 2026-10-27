@@ -62,3 +62,35 @@ vercel
 ```
 
 Need help with the deploy settings or environment variables? Ask me and I can make them exact for your project.
+
+### Database migrations
+
+Migration files live in `supabase/migrations/`, applied via the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) (pinned as a devDependency — `npx supabase <command>` always uses the exact version in `package.json`, not whatever's latest). The production project ref is `itijkrefaugbpagamxqr` (from `NEXT_PUBLIC_SUPABASE_URL` — a project ref isn't secret, it's the same string already in the public client URL).
+
+**The database password is never shared with an AI assistant or pasted into chat.** Applying a migration to production is always run by a human, directly in their own terminal.
+
+One-time setup (per machine), done once before any of this works:
+
+```bash
+npx supabase login
+npx supabase link --project-ref itijkrefaugbpagamxqr
+```
+
+The very first time this repo is linked, every existing migration must be marked as already-applied (the CLI was never used for these — they were pasted into the Supabase SQL Editor by hand) **before running any `db push`**, or the CLI will try to replay all of them, including destructive ones from this project's early history. See the one-time repair commands below if this hasn't been done yet.
+
+**Applying a new migration to production**, once linked:
+
+```bash
+# 1. Preview exactly what SQL would run — applies nothing.
+npx supabase db push --project-ref itijkrefaugbpagamxqr --dry-run
+
+# 2. Read the output carefully — same scrutiny as reading a migration
+#    file before pasting it into the SQL Editor. If it's not exactly the
+#    one new migration you expect, stop and find out why before step 3.
+
+# 3. Apply for real. This is the only step that touches production, and
+#    it needs the database password, so this part is always run by hand.
+npx supabase db push --project-ref itijkrefaugbpagamxqr
+```
+
+If anything in step 2 looks wrong — more than the expected migration(s) listed, or output that doesn't match the file you just wrote — stop and investigate before running step 3.
