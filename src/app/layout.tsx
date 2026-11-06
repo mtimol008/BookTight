@@ -22,14 +22,35 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
+const SITE_URL = "https://booktight.co.uk";
+const DESCRIPTION =
+  "Booktight schedules your next job on the day that adds the least extra driving. Built for solo UK tradespeople.";
+
 export const metadata: Metadata = {
-  title: "Booktight",
-  description: "Job scheduling that minimizes driving distance",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Booktight — book jobs where they save you the most driving",
+    template: "%s — Booktight",
+  },
+  description: DESCRIPTION,
   icons: {
     icon: "/favicon-96x96.png?v=2",
     apple: { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
   },
   manifest: "/manifest.json",
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "Booktight",
+    title: "Booktight — book jobs where they save you the most driving",
+    description: DESCRIPTION,
+    locale: "en_GB",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Booktight — book jobs where they save you the most driving",
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

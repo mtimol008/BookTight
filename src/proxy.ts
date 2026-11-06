@@ -34,6 +34,12 @@ const PUBLIC_PATHS = [
   // category as the calendar feed, authenticated by its own signature
   // instead (verified inside the route itself).
   "/api/stripe/webhook",
+  // Next's generated metadata routes (src/app/sitemap.ts, robots.ts,
+  // opengraph-image.tsx) — search crawlers and social-link unfurlers fetch
+  // these with no session at all, same as the calendar feed above.
+  "/sitemap.xml",
+  "/robots.txt",
+  "/opengraph-image",
 ];
 
 export async function proxy(request: NextRequest) {
@@ -66,9 +72,14 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicPath = PUBLIC_PATHS.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  );
+  // "/" itself is public too (the landing page, for a signed-out visitor —
+  // page.tsx renders the app instead once there's a session). It's an
+  // EXACT match, kept out of the PUBLIC_PATHS array on purpose: every path
+  // starts with "/", so adding it as a prefix there would make every route
+  // public.
+  const isPublicPath =
+    request.nextUrl.pathname === "/" ||
+    PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
   const isAuthPage = AUTH_PAGES.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );

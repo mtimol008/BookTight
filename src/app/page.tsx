@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { LandingPage } from "@/components/LandingPage";
 import { AccountCircleIcon, PlusIcon } from "@/components/icons";
 import JobsTableClient from "@/components/JobsTableClient";
 import type { DayPlan } from "@/components/JobsTable";
@@ -103,14 +104,15 @@ function daysSince(isoTimestamp: string, referenceNow: Date = new Date()): numbe
 }
 
 export default async function Home() {
-  const { startDate, endDate } = getCurrentWeekRange();
-  // Fetched ahead of the rest (rather than folded into the Promise.all
-  // below) because the user's own today — not the server's — depends on
-  // their stored timezone, and getUnreviewedSummary/buildDayPlans both
-  // need that same string. Costs one profile-fetch's worth of latency on
-  // the critical path instead of fully overlapping all four; worth it to
-  // get the day boundary right during BST (see nowForScheduling).
+  // "/" is now reachable signed out too (see proxy.ts) — a visitor with no
+  // profile gets the marketing landing page instead of the app itself,
+  // before any of the app's own data fetching below ever runs.
   const profile = await getCurrentProfile();
+  if (!profile) {
+    return <LandingPage />;
+  }
+
+  const { startDate, endDate } = getCurrentWeekRange();
   const today = profile
     ? getTodayDateStringInTimezone(profile.timezone)
     : getTodayDateString();
