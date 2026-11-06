@@ -213,6 +213,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
         ) : null}
         {children}
+        <p className="footer" style={{ marginTop: 28 }}>
+          <Link href="/contact">Send feedback</Link>
+        </p>
       </main>
       <nav className="nav">
         {NAV.map(({ href, label, Icon }) => {

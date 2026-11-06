@@ -5,6 +5,7 @@ import {
   deleteJob,
   getJobById,
   getJobsForWeek,
+  getTotalJobCount,
   insertJob,
   setJobStatuses,
   setManualPositions,
@@ -15,6 +16,7 @@ import { getCurrentProfile, type EngagementState, type ProfileRecord } from "@/l
 import { getCurrentSubscription } from "@/lib/subscriptions";
 import { hasActiveEntitlement, READ_ONLY_MESSAGE } from "@/lib/entitlement";
 import { isPaywallEnabled } from "@/lib/paywallConfig";
+import { recordEvent } from "@/lib/analytics";
 import { updateEngagementState } from "@/lib/engagement";
 import {
   compareManualOrder,
@@ -848,6 +850,19 @@ export async function confirmAndSaveJob(
     duration_minutes: input.durationMinutes,
     urgency: input.urgency ?? "normal",
   });
+
+  // After, not before — the count needs to include the job just inserted.
+  // Cheap either way (getTotalJobCount is a head-only count, no rows
+  // fetched), and only worth the query at all on the two counts that
+  // could actually be a milestone.
+  if (profile) {
+    const totalJobs = await getTotalJobCount();
+    if (totalJobs === 1) {
+      await recordEvent(profile.id, "first_job");
+    } else if (totalJobs === 3) {
+      await recordEvent(profile.id, "third_job");
+    }
+  }
 
   revalidatePath("/");
   return checkAhaMoment(input.date);

@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import type Stripe from "stripe";
 import { getStripeClient, priceIdToPlan } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordEvent } from "@/lib/analytics";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -104,6 +105,12 @@ async function handleEvent(admin: AdminClient, event: Stripe.Event): Promise<voi
         })
         .eq("user_id", userId);
       if (error) throw new Error(error.message);
+
+      // This is the one-time "they just became a paying customer" moment
+      // — a completed Checkout only ever happens once per subscription,
+      // whether or not they were ever on this app's own no-card trial
+      // first.
+      await recordEvent(userId, "trial_to_paid");
       break;
     }
 

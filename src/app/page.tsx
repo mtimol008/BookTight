@@ -13,6 +13,7 @@ import {
   type JobRecord,
 } from "@/lib/jobs";
 import { getCurrentProfile } from "@/lib/profiles";
+import { recordEvent } from "@/lib/analytics";
 import { planDayRoute, type ExistingJob, type TimeSlotType } from "@/lib/scheduling";
 import { TERMS_VERSION } from "@/lib/terms";
 import {
@@ -118,6 +119,18 @@ export default async function Home() {
     getUnreviewedSummary(today),
     getTotalJobCount(),
   ]);
+
+  // "Came back on a later calendar day than they signed up" — in the
+  // user's own timezone, same as every other day boundary on this page,
+  // and before any of the redirects below so it fires on any day-2+ visit
+  // regardless of onboarding/terms/welcome status, not just a fully
+  // through-onboarding one.
+  if (profile) {
+    const signupDate = getTodayDateStringInTimezone(profile.timezone, new Date(profile.created_at));
+    if (today !== signupDate) {
+      await recordEvent(profile.id, "day2_return");
+    }
+  }
 
   // The one entry point sign-in already redirects to — gating here (rather
   // than on every route) means onboarding, and re-accepting updated terms,

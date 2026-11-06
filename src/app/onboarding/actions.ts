@@ -2,6 +2,7 @@
 
 import { validateBusinessRules } from "@/lib/businessRules";
 import { createClient } from "@/lib/supabase/server";
+import { recordEvent } from "@/lib/analytics";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -40,6 +41,8 @@ export async function completeOnboarding(
   if (error) {
     return { error: error.message };
   }
+
+  await recordEvent(user.id, "onboarding_complete");
 
   revalidatePath("/", "layout");
   redirect("/");

@@ -4,6 +4,7 @@ import { geocodeAddress } from "@/lib/geocoding";
 import { createClient } from "@/lib/supabase/server";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { checkIpRateLimit, getClientIp } from "@/lib/rateLimit";
+import { recordEvent } from "@/lib/analytics";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
@@ -108,6 +109,13 @@ export async function signUp(
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Recorded at account-creation time, not email-confirmation time — this
+  // is "signup" the action, not "confirmed", and data.user exists either
+  // way (signUp() returns the created user even before confirmation).
+  if (data.user) {
+    await recordEvent(data.user.id, "signup");
   }
 
   // If email confirmation is required (Supabase's default), there's no

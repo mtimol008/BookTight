@@ -6,6 +6,7 @@ export function Footer() {
       <Link href="/privacy">Privacy</Link>
       <Link href="/terms">Terms</Link>
       <Link href="/contact">Contact</Link>
+      <Link href="/contact">Send feedback</Link>
     </p>
   );
 }
