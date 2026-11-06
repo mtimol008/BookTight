@@ -61,6 +61,17 @@ const nextConfig: NextConfig = {
   // trivial, but there's no reason to hand out free framework fingerprinting.
   poweredByHeader: false,
 
+  // The landing screenshots are pre-exported WebPs at exactly these two
+  // widths (scripts/landing-screenshots/export.mjs), served by a custom
+  // loader, so next/image's srcset lists just "780w, 1170w" — no widths
+  // that don't exist as files, and nothing larger than the 1170px capture.
+  // They're the only next/image use in the app; a future image that needs
+  // other widths should add them here.
+  images: {
+    imageSizes: [780],
+    deviceSizes: [1170],
+  },
+
   async headers() {
     return [
       {

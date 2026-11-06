@@ -8,7 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:scheduling": "tsx scripts/test-scheduling.ts"
+    "test:scheduling": "tsx scripts/test-scheduling.ts",
+    "screenshots:seed": "node --env-file=.env.local scripts/landing-screenshots/seed.mjs",
+    "screenshots:capture": "node --env-file=.env.local scripts/landing-screenshots/capture.mjs",
+    "screenshots:cleanup": "node --env-file=.env.local scripts/landing-screenshots/cleanup.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -28,6 +31,8 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
+    "playwright": "^1.65.0",
+    "sharp": "^0.35.5",
     "supabase": "2.122.0",
     "tsx": "^4.23.5",
     "typescript": "^5"

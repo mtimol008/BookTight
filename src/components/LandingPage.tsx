@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { LandingScreenshot } from "@/components/LandingScreenshot";
 import Link from "next/link";
 
 const CHECK_PATH = "M4 12.5l5.5 5.5L20 7";
@@ -237,12 +237,7 @@ export function LandingPage() {
             </div>
             <div className="landing-phone" role="img" aria-label="Booktight on a phone, suggesting the best day for a new job">
               <div className="landing-phone-screen">
-                <Image
-                  src="/landing/screenshot-add.jpg"
-                  alt=""
-                  width={390}
-                  height={844}
-                />
+                <LandingScreenshot name="screenshot-add" priority />
               </div>
             </div>
           </div>
@@ -342,12 +337,7 @@ export function LandingPage() {
             </div>
             <div className="landing-phone" role="img" aria-label="Booktight's week view showing each day's jobs in driving order">
               <div className="landing-phone-screen">
-                <Image
-                  src="/landing/screenshot-week.jpg"
-                  alt=""
-                  width={390}
-                  height={844}
-                />
+                <LandingScreenshot name="screenshot-week" />
               </div>
             </div>
           </div>

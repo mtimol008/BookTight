@@ -43,3 +43,7 @@ next-env.d.ts
 
 # supabase CLI local cache
 supabase/.temp/
+
+# landing screenshot tooling: demo-account id and raw PNG captures
+scripts/landing-screenshots/.demo-account.json
+scripts/landing-screenshots/out/
