@@ -14,7 +14,7 @@ export default function PrivacyPage() {
       <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
         <h1 className="screen-title" style={{ marginBottom: 10 }}>Privacy Policy</h1>
         <p className="legal-meta">
-          Last updated: 27 October 2026 &middot; Version: {TERMS_VERSION}
+          Last updated: 6 November 2026 &middot; Version: {TERMS_VERSION}
         </p>
 
         <div className="legal-doc">
@@ -54,8 +54,14 @@ export default function PrivacyPage() {
           </p>
           <p>
             c) <strong>Technical data:</strong> IP address and request details (used for security
-            and abuse prevention), error reports, and basic hosting logs. We do not use
-            advertising or analytics trackers.
+            and abuse prevention), error reports, and basic hosting logs. We also record a small
+            number of product-usage milestones &mdash; for example that you signed up, finished
+            onboarding, booked your first and third job, returned a couple of days after signing
+            up, or moved from a trial to a paid plan &mdash; to understand how BookTight is used.
+            This is stored in our main database alongside your account data (hosted by our
+            database provider listed in this policy), is not shared with anyone else or used for
+            advertising, uses no cookies, and is deleted when you delete your account. We do not
+            use advertising trackers.
           </p>
           <p>
             d) <strong>Payments (once paid plans start):</strong> handled by Stripe. We receive
