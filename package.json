@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:scheduling": "tsx scripts/test-scheduling.ts",
+    "test:deletion-cron": "tsx --env-file=.env.local scripts/test-deletion-cron.ts",
     "screenshots:seed": "node --env-file=.env.local scripts/landing-screenshots/seed.mjs",
     "screenshots:capture": "node --env-file=.env.local scripts/landing-screenshots/capture.mjs",
     "screenshots:cleanup": "node --env-file=.env.local scripts/landing-screenshots/cleanup.mjs"
@@ -23,6 +24,7 @@
     "next": "16.4.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "resend": "^6.37.0",
     "stripe": "^23.0.1"
   },
   "devDependencies": {

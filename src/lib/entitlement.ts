@@ -80,3 +80,35 @@ export function lapsedSince(sub: SubscriptionRecord | null): Date | null {
   // as lapsed with none left.
   return new Date(0);
 }
+
+/**
+ * Like lapsedSince(), but floored at PAYWALL_LIVE_FROM (the date the
+ * paywall actually started enforcing entitlement) — used by the 90-day
+ * deletion cron and the billing banner so neither ever starts an account's
+ * deletion clock earlier than paywall launch itself. Without this floor, an
+ * existing beta account whose nominal trial_ends_at is months in the past
+ * would look like it lapsed back then too, and could be due for deletion
+ * within hours of the paywall switching on.
+ *
+ * Throws if the paywall is enabled but this floor was never set — that
+ * combination must never run quietly, since every lapse date it computes
+ * would be wrong.
+ */
+export function effectiveLapsedAt(sub: SubscriptionRecord | null): Date | null {
+  const raw = lapsedSince(sub);
+  if (!raw) {
+    return null;
+  }
+  if (!isPaywallEnabled()) {
+    return raw;
+  }
+  const floorRaw = process.env.PAYWALL_LIVE_FROM;
+  if (!floorRaw) {
+    throw new Error(
+      "PAYWALL_LIVE_FROM must be set once PAYWALL_ENABLED is true — it's the floor under every " +
+        "account's deletion clock, so a lapse date can never predate paywall launch itself."
+    );
+  }
+  const floor = new Date(floorRaw);
+  return floor > raw ? floor : raw;
+}

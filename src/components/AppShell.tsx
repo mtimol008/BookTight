@@ -207,6 +207,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link href="/billing" className="billing-banner billing-banner--warning">
             Your last payment failed — update your card
           </Link>
+        ) : billingBanner?.deletionDaysLeft !== null && billingBanner?.deletionDaysLeft !== undefined ? (
+          <Link href="/billing" className="billing-banner billing-banner--warning">
+            {billingBanner.deletionDaysLeft <= 1
+              ? "Your account and data will be deleted very soon"
+              : `Your account is read-only — data deleted in ${billingBanner.deletionDaysLeft} days`}{" "}
+            — resubscribe
+          </Link>
         ) : trialDaysLeft !== null ? (
           <Link href="/billing" className="billing-banner">
             {trialDaysLeft === 1 ? "Your trial ends tomorrow" : `Your trial ends in ${trialDaysLeft} days`} — subscribe
