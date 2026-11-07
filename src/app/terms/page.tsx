@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { TERMS_VERSION } from "@/lib/terms";
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "The terms for using Booktight.",
+};
 
 export default function TermsPage() {
   return (

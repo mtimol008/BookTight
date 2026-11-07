@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { TERMS_VERSION } from "@/lib/terms";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "How Booktight collects, uses and protects your data.",
+};
 
 export default function PrivacyPage() {
   return (

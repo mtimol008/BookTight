@@ -1815,7 +1815,10 @@ body[data-field-focused="true"] .fab {
 
 .landing-tag--warn {
   background: var(--tint-warning);
-  color: var(--warning);
+  /* var(--warning) itself fails WCAG AA (4.15:1) at this small a size on
+     this tint — a touch darker clears 4.5:1 without reading as a
+     different colour. */
+  color: #b8401f;
 }
 
 .landing-tag--route {
@@ -1943,7 +1946,13 @@ body[data-field-focused="true"] .fab {
   line-height: 1.6;
 }
 
-.landing-step-aside {
+/* Qualified with .landing-step so this outranks .landing-step p's own
+   color:var(--muted) — as a bare class the two tied on specificity and
+   .landing-step p happened to win, silently rendering this box's text in
+   grey instead of the intended teal (and in grey, it fell 0.09:1 short of
+   WCAG AA on this background — the color it was actually meant to have
+   passes with room to spare). */
+.landing-step .landing-step-aside {
   margin-top: 14px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);

@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Contact",
+  description: "Get in touch with Booktight.",
+};
 
 export default function ContactPage() {
   return (
