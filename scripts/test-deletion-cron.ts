@@ -91,9 +91,13 @@ async function setCompedUntil(userId: string, date: Date | null) {
 }
 
 async function insertWarningLog(userId: string, milestone: DeletionWarningMilestone, sentAt: Date) {
+  // onConflict must name the (user_id, milestone) unique constraint
+  // explicitly — upsert() defaults to the primary key (id, always a fresh
+  // uuid here), which would just insert a second row and collide with
+  // that unique constraint instead of updating the existing one.
   const { error } = await admin
     .from("deletion_warning_log")
-    .upsert({ user_id: userId, milestone, sent_at: sentAt.toISOString() });
+    .upsert({ user_id: userId, milestone, sent_at: sentAt.toISOString() }, { onConflict: "user_id,milestone" });
   if (error) throw error;
 }
 
@@ -129,7 +133,7 @@ async function phaseA_fullLifecycle() {
   // from trial_ends_at, same as it would for a real expired trial.
   await setTrialEndsAt(userId, new Date(Date.now() - 60_000));
   let stub = makeStubSendEmail();
-  let summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  let summary = await runDeletionWarningsJob({ sendEmail: stub.fn, onlyUserIds: [userId] });
   const sub1 = await subscriptionRow(userId);
   check("lapsed_at set on first lapse", !!sub1?.lapsed_at);
   check(
@@ -147,20 +151,26 @@ async function phaseA_fullLifecycle() {
   ] as const) {
     await setLapsedAt(userId, daysAgo(days));
     stub = makeStubSendEmail();
-    await runDeletionWarningsJob({ sendEmail: stub.fn });
+    await runDeletionWarningsJob({ sendEmail: stub.fn, onlyUserIds: [userId] });
     check(`'${milestone}' milestone email sent at day ${days}`, stub.sent.some((s) => s.milestone === milestone));
   }
 
-  // Day 91: day_89 becomes due and is sent this run. The earlier
-  // milestones (lapsed at day 0, day_30 at day 31, day_60 at day 61,
-  // day_80 at day 81) are already well past 7 days old by now, so the
-  // warning-history gate (see phaseD below for its own dedicated test) is
-  // already satisfied the moment day_89 goes out — only DELETION_ENABLED
-  // stands between this account and being deleted.
+  // The job stamps every warning row's sent_at as real wall-clock "now",
+  // regardless of how far back lapsed_at is simulated to be — so "day_80
+  // was sent 10 real days ago" has to be faked explicitly too, by
+  // backdating that row directly, or the warning-history gate below would
+  // never see an aged earlier warning in a test that runs in seconds.
+  await insertWarningLog(userId, "day_80", daysAgo(10));
+
+  // Day 91: day_89 becomes due and is sent this run. With day_80 now
+  // genuinely 10 (simulated) real days old, the warning-history gate (see
+  // phaseD below for its own dedicated test) is already satisfied the
+  // moment day_89 goes out — only DELETION_ENABLED stands between this
+  // account and being deleted.
   await setLapsedAt(userId, daysAgo(91));
   delete process.env.DELETION_ENABLED;
   stub = makeStubSendEmail();
-  summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  summary = await runDeletionWarningsJob({ sendEmail: stub.fn, onlyUserIds: [userId] });
   check("'day_89' milestone email sent at day 91", stub.sent.some((s) => s.milestone === "day_89"));
   check(
     "deletion skipped — DELETION_ENABLED is off",
@@ -171,7 +181,7 @@ async function phaseA_fullLifecycle() {
   // Flip it on for this process only and run once more.
   process.env.DELETION_ENABLED = "true";
   stub = makeStubSendEmail();
-  summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  summary = await runDeletionWarningsJob({ sendEmail: stub.fn, onlyUserIds: [userId] });
   check("deletion succeeded once enabled", summary.deletionsSucceeded === 1, JSON.stringify(summary));
   check("account actually gone", !(await userStillExists(userId)));
 
@@ -189,13 +199,18 @@ async function phaseA_fullLifecycle() {
 async function phaseB_resubscribeClears() {
   console.log("\n--- Phase B: resubscribing clears lapsed_at and the warning log ---");
   const { userId } = await createAccount();
+  // A fresh account's real trial_ends_at is 14 days in the future (set by
+  // the signup trigger) — expire it first, or hasActiveEntitlement would
+  // already be true for the still-active-trial reason, not the comped
+  // reason this phase means to test.
+  await setTrialEndsAt(userId, daysAgo(41));
   await setLapsedAt(userId, daysAgo(40));
   await insertWarningLog(userId, "lapsed", daysAgo(40));
   await insertWarningLog(userId, "day_30", daysAgo(10));
 
   await setCompedUntil(userId, new Date(Date.now() + 30 * 86_400_000));
   const stub = makeStubSendEmail();
-  const summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  const summary = await runDeletionWarningsJob({ sendEmail: stub.fn, onlyUserIds: [userId] });
 
   check("clearedResubscribed counted", summary.clearedResubscribed === 1, String(summary.clearedResubscribed));
   const sub = await subscriptionRow(userId);
@@ -212,14 +227,22 @@ async function phaseC_capAtFivePerRun() {
   for (let i = 0; i < 6; i++) {
     const { userId } = await createAccount();
     const lapseDays = 97 + i; // staggered so sort order is deterministic
+    // Expire the real trial first (see phaseB's own comment on why), then
+    // give each account both an aged earlier warning and a day_89 — the
+    // two things the deletion gate actually requires.
+    await setTrialEndsAt(userId, daysAgo(lapseDays + 1));
     await setLapsedAt(userId, daysAgo(lapseDays));
+    await insertWarningLog(userId, "day_80", daysAgo(10));
     await insertWarningLog(userId, "day_89", daysAgo(8));
     accounts.push({ userId, lapseDays });
   }
 
   process.env.DELETION_ENABLED = "true";
   const stub = makeStubSendEmail();
-  const summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  const summary = await runDeletionWarningsJob({
+    sendEmail: stub.fn,
+    onlyUserIds: accounts.map((a) => a.userId),
+  });
   delete process.env.DELETION_ENABLED;
 
   check("exactly 5 deleted", summary.deletionsSucceeded === 5, String(summary.deletionsSucceeded));
@@ -247,6 +270,8 @@ async function phaseC_capAtFivePerRun() {
 async function phaseD_finalWarningGateNeedsAnAgedEarlierWarning() {
   console.log("\n--- Phase D: deletion needs day_89 AND an aged earlier warning, not day_89 alone ---");
   const { userId } = await createAccount();
+  // Expire the real trial first (see phaseB's own comment on why).
+  await setTrialEndsAt(userId, daysAgo(91));
   await setLapsedAt(userId, daysAgo(90));
   process.env.DELETION_ENABLED = "true";
 
@@ -254,7 +279,7 @@ async function phaseD_finalWarningGateNeedsAnAgedEarlierWarning() {
   // this account — must not delete, however old the lapse itself is.
   await insertWarningLog(userId, "day_89", daysAgo(1));
   let stub = makeStubSendEmail();
-  let summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  let summary = await runDeletionWarningsJob({ sendEmail: stub.fn, onlyUserIds: [userId] });
   check(
     "day_89 alone, no earlier warning: deletion skipped",
     summary.deletionsSkippedInsufficientWarningHistory === 1 && summary.deletionsSucceeded === 0,
@@ -266,7 +291,7 @@ async function phaseD_finalWarningGateNeedsAnAgedEarlierWarning() {
   // day 90.
   await insertWarningLog(userId, "day_80", daysAgo(8));
   stub = makeStubSendEmail();
-  summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  summary = await runDeletionWarningsJob({ sendEmail: stub.fn, onlyUserIds: [userId] });
   check(
     "day_89 plus an aged earlier warning: deletes on day 90",
     summary.deletionsSucceeded === 1,
@@ -286,6 +311,14 @@ async function cleanupAnyRemaining() {
 }
 
 async function main() {
+  // hasActiveEntitlement() always returns true while PAYWALL_ENABLED is
+  // off (correct for production, since the paywall isn't live yet) — so
+  // every scenario below needs it on for this process only, with
+  // PAYWALL_LIVE_FROM set safely in the past so the floor never clips any
+  // of this script's deliberately backdated lapse dates (the oldest goes
+  // back 102 days).
+  process.env.PAYWALL_ENABLED = "true";
+  process.env.PAYWALL_LIVE_FROM = daysAgo(365).toISOString();
   try {
     await phaseA_fullLifecycle();
     await phaseB_resubscribeClears();
@@ -293,6 +326,8 @@ async function main() {
     await phaseD_finalWarningGateNeedsAnAgedEarlierWarning();
   } finally {
     await cleanupAnyRemaining();
+    delete process.env.PAYWALL_ENABLED;
+    delete process.env.PAYWALL_LIVE_FROM;
   }
 
   if (failures > 0) {

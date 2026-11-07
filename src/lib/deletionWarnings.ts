@@ -84,9 +84,16 @@ interface DeletionCandidate {
  * (no lapsed_at set/clear, no email sent, no warning claimed, no account
  * deleted) — for a manual sanity check against real data with zero side
  * effects.
+ *
+ * onlyUserIds restricts the whole run to those specific accounts instead
+ * of every row in subscriptions — scripts/test-deletion-cron.ts always
+ * passes this, scoped to the throwaway accounts it just created, so a test
+ * run against the real, shared database can never touch anyone else's
+ * account. The real cron (the GET route) never passes it, since production
+ * genuinely does need to scan every account.
  */
 export async function runDeletionWarningsJob(
-  opts: { dryRun?: boolean; sendEmail?: SendEmailFn } = {}
+  opts: { dryRun?: boolean; sendEmail?: SendEmailFn; onlyUserIds?: string[] } = {}
 ): Promise<DeletionWarningsRunSummary> {
   const dryRun = opts.dryRun ?? false;
   const sendEmail = opts.sendEmail ?? sendDeletionWarningEmail;
@@ -100,7 +107,11 @@ export async function runDeletionWarningsJob(
   const admin = createAdminClient();
   const summary = emptySummary();
 
-  const { data: subs, error: subsError } = await admin.from("subscriptions").select("*");
+  let query = admin.from("subscriptions").select("*");
+  if (opts.onlyUserIds) {
+    query = query.in("user_id", opts.onlyUserIds);
+  }
+  const { data: subs, error: subsError } = await query;
   if (subsError) {
     throw new Error(`Failed to fetch subscriptions: ${subsError.message}`);
   }
