@@ -295,6 +295,8 @@ export function DayReview({
             <button
               key={job.id}
               type="button"
+              role="checkbox"
+              aria-checked={isChecked}
               className={`check-row${isChecked ? " is-checked" : ""}`}
               onClick={() => toggle(job.id)}
             >

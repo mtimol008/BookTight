@@ -49,9 +49,9 @@ export default async function BillingPage({
         <div className="wordmark">Booktight</div>
       </div>
 
-      <div className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
+      <h1 className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
         Billing
-      </div>
+      </h1>
       <div className="card">
         {error && <p className="error-text">{error}</p>}
 

@@ -89,6 +89,7 @@ export default async function AccountPage({
 
   return (
     <AppShell>
+      <h1 className="sr-only">Account</h1>
       <div className="screen-head">
         <div className="wordmark">Booktight</div>
       </div>

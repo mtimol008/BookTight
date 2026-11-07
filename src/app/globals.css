@@ -11,6 +11,13 @@
   --bg: #faf9f6;
   --surface: #ffffff;
   --accent: #e8a93a;
+  /* var(--accent) itself is tuned for use as a background (dark text sits
+     on top of it just fine) — as text color on a light background it falls
+     well short of WCAG AA (2.07:1 on white). This is that same gold,
+     darkened only for the few places it's used as text, so it stays
+     recognisably the same colour rather than switching to a different
+     accent. Passes 4.5:1 on both white and --tint-accent. */
+  --accent-text: #96621a;
   --route: #3d8c7f;
   --warning: #c94c33;
   --success: #3d8c6b;
@@ -87,6 +94,17 @@ select {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+/* Only .input/.textarea/.select had a deliberate focus style before this —
+ * every button, link, nav tab, chip and check-row relied on the browser's
+ * own bare default outline, which Safari has a long history of suppressing
+ * on buttons and links entirely. One rule, applies everywhere at once.
+ * :focus-visible (not :focus) so a mouse click doesn't show a ring a
+ * keyboard Tab would. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ---------------------------------------------------------------- shell */
@@ -259,7 +277,7 @@ button:disabled {
 }
 
 .nav-item.is-active {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Focusing a field makes the OS put something over the bottom of the
@@ -277,6 +295,23 @@ body[data-field-focused="true"] .fab {
 }
 
 /* ----------------------------------------------------------- typography */
+
+/* Standard visually-hidden pattern — present for assistive tech (e.g. a
+   page's real <h1>, on a screen where the brand wordmark is the only
+   visible heading-shaped text) without taking up layout space or
+   appearing on screen. display:none would hide it from screen readers
+   too, which defeats the point. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .wordmark {
   font-family: var(--font-oswald), sans-serif;
@@ -556,7 +591,7 @@ body[data-field-focused="true"] .fab {
   flex-shrink: 0;
   border-radius: 999px;
   background: var(--tint-accent);
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: var(--font-oswald), sans-serif;
   font-size: 17px;
   letter-spacing: 0.04em;
@@ -605,12 +640,17 @@ body[data-field-focused="true"] .fab {
 
 .back-link {
   position: absolute;
-  left: 0;
+  /* The 20px icon had no padding at all before — a 12px pad reaches 44px,
+     and shifting left by the same 12px keeps the icon itself sitting where
+     it always did, growing the tap target into .shell's own side padding
+     rather than into the page content. */
+  left: -12px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text);
   display: inline-flex;
   align-items: center;
+  padding: 12px;
 }
 
 .icon-btn {
@@ -618,6 +658,13 @@ body[data-field-focused="true"] .fab {
   border: none;
   color: var(--text);
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* min, not fixed width/height: the icon itself varies in size between
+     uses (24px account icon, 20px calendar chevrons) — this guarantees
+     44px regardless, rather than padding math tuned to one icon size. */
+  min-width: 44px;
+  min-height: 44px;
   padding: 4px;
 }
 
@@ -960,6 +1007,12 @@ body[data-field-focused="true"] .fab {
 }
 
 .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Width was already comfortable; height alone was short (~34px) of the
+     44px minimum tap target. */
+  min-height: 44px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -1013,7 +1066,10 @@ body[data-field-focused="true"] .fab {
 .day-distance {
   font-family: var(--font-mono), monospace;
   font-size: 12px;
-  color: var(--route);
+  /* var(--route) on this card's plain white falls short of AA (3.99:1) —
+     every other use of --route as text sits on --tint-route, which is
+     dark enough itself to pass; this is the one spot it's on plain white. */
+  color: #2f6f64;
   margin-top: 2px;
 }
 
@@ -1304,7 +1360,10 @@ body[data-field-focused="true"] .fab {
   padding: 2px 7px;
   border-radius: var(--radius-pill);
   background: var(--tint-warning);
-  color: var(--warning);
+  /* var(--warning) itself falls short of WCAG AA (4.14:1) at this small a
+     size on this tint — a touch darker clears 4.5:1 without reading as a
+     different colour (same fix already proven on the landing page). */
+  color: #b8401f;
   margin-left: 6px;
 }
 

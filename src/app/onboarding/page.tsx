@@ -15,9 +15,9 @@ export default async function OnboardingPage() {
     <main className="shell shell--bare">
       <div style={{ textAlign: "center", marginBottom: 28 }}>
         <div className="wordmark wordmark--lg">Booktight</div>
-        <div className="tagline" style={{ marginTop: 6 }}>
+        <h1 className="tagline" style={{ marginTop: 6 }}>
           A couple of settings before you get started
-        </div>
+        </h1>
       </div>
 
       <div className="card">

@@ -171,6 +171,7 @@ export default async function Home() {
 
   return (
     <AppShell>
+      <h1 className="sr-only">This Week</h1>
       <div className="screen-head">
         <div>
           <div className="wordmark">Booktight</div>

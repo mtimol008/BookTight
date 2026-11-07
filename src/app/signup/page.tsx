@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function SignUpPage() {
   return (
     <main className="shell shell--bare">
+      <h1 className="sr-only">Sign up</h1>
       <div style={{ textAlign: "center", marginBottom: 28 }}>
         <div className="wordmark wordmark--lg">Booktight</div>
         <div className="tagline" style={{ marginTop: 6 }}>

@@ -122,6 +122,7 @@ export default async function CalendarPage({
 
   return (
     <AppShell>
+      <h1 className="sr-only">Calendar</h1>
       <div className="screen-head">
         <div className="wordmark">Booktight</div>
       </div>
