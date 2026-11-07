@@ -81,11 +81,14 @@ async function waitForServer() {
   throw new Error("next start didn't come up on port " + PORT);
 }
 
-// Scrollbars and anything toast-like are hidden; animations are settled.
+// Scrollbars and anything toast-like are hidden; animations are settled;
+// the floating add-job button is hidden too — on the week capture it sits
+// right on top of "See details" on the second day card.
 const CLEAN_CSS = `
   html, body, * { scrollbar-width: none !important; }
   ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
   [data-sonner-toaster], [role="status"][aria-live], .toast, nextjs-portal { display: none !important; }
+  .fab { display: none !important; }
   *, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; caret-color: transparent !important; }
 `;
 
@@ -142,19 +145,24 @@ try {
   await page.getByRole("button", { name: "Find the best day" }).click();
   await page.locator(".suggest-headline").first().waitFor({ timeout: 20000 });
   await settle(page);
-  // Start the frame on a whole block, never a half-cut line: the duration
-  // help text just above "Time" (the page can't scroll far enough to start
-  // at "Time" itself), falling back to the "Time" label.
-  await page.evaluate(() => {
-    const leaf = [...document.querySelectorAll("p, div, span")].find(
-      (el) => el.children.length === 0 && el.textContent.includes("longer ones nearby"),
-    );
-    const label = [...document.querySelectorAll(".field-label")].find((el) => el.textContent.trim() === "Time");
-    const anchor = leaf ?? label ?? document.querySelector(".suggest");
-    window.scrollTo(0, anchor.getBoundingClientRect().top + window.scrollY - 24);
+  // Start the frame at a clean section boundary ("Time"), not mid-input:
+  // the fields above it (address/customer/description/duration) are
+  // already filled in and add nothing to this particular screenshot, so
+  // they're hidden outright — scrolling alone couldn't reach "Time" at
+  // all, let alone land exactly on it, because the page ran out of room
+  // to scroll before getting there.
+  const reachedTop = await page.evaluate(() => {
+    const timeLabel = [...document.querySelectorAll(".field-label")].find((el) => el.textContent.trim() === "Time");
+    const timeField = timeLabel?.closest(".field");
+    if (!timeField) return false;
+    for (const field of document.querySelectorAll(".field")) {
+      if (field === timeField) break;
+      field.style.display = "none";
+    }
+    window.scrollTo(0, 0);
+    return window.scrollY === 0;
   });
-  const top = await page.evaluate(() => window.scrollY);
-  console.log(`  add screen scrolled to ${top}px`);
+  if (!reachedTop) throw new Error("Could not hide the fields above 'Time' / reach the top of the page");
   await page.waitForTimeout(300);
   await shoot(page, "screenshot-add");
 
