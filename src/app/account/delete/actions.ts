@@ -28,7 +28,7 @@ export async function deleteAccount(
   }
 
   try {
-    await deleteAccountCore(user.id, user.email ?? "", "user_requested");
+    await deleteAccountCore(user.id, "user_requested");
   } catch (err) {
     if (err instanceof StripeCancelError) {
       Sentry.captureException(err, { tags: { stage: "delete-account-cancel-subscription" } });

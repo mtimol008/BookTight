@@ -24,8 +24,11 @@ alter table public.subscriptions
 -- fails, so a failed send is retried on the next run rather than silently
 -- skipped forever. This table also doubles as the one thing the cron
 -- checks before it will ever delete an account: it refuses unless a
--- 'day_89' row here is at least 7 days old. RLS enabled with no policies —
--- service-role only, same pattern as stripe_webhook_events.
+-- 'day_89' row exists AND at least one earlier milestone row (lapsed /
+-- day_30 / day_60 / day_80) is 7+ days old — not "day_89 itself is 7+
+-- days old", which could never be true right at the day-90 deletion
+-- point it's meant to gate. RLS enabled with no policies — service-role
+-- only, same pattern as stripe_webhook_events.
 create table public.deletion_warning_log (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -44,13 +47,15 @@ alter table public.deletion_warning_log enable row level security;
 -- NOT foreign-keyed to auth.users, unlike every other table in this
 -- schema — the whole point of this table is that its rows survive the
 -- very deletion they're describing, which an "on delete cascade" FK would
--- wipe out at exactly the moment it matters. RLS enabled with no
--- policies — service-role only; nobody ever has a session to read this
--- from, since by definition the account it's about no longer exists.
+-- wipe out at exactly the moment it matters. No email column either —
+-- this is only ever a record that a deletion happened, not a place to
+-- keep hold of personal data past the deletion it's logging. RLS enabled
+-- with no policies — service-role only; nobody ever has a session to
+-- read this from, since by definition the account it's about no longer
+-- exists.
 create table public.account_deletion_log (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
-  email text not null,
   reason text not null check (reason in ('user_requested', 'auto_90_day')),
   jobs_count integer not null default 0,
   deleted_at timestamptz not null default now()

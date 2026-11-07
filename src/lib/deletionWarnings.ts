@@ -16,11 +16,16 @@ const MILESTONES: ReadonlyArray<{ key: DeletionWarningMilestone; afterDays: numb
 ];
 
 const DELETE_AFTER_DAYS = 90;
-/** However far behind schedule things get, an account is never deleted
- *  unless the final warning has had at least this long to actually reach
- *  someone — decoupled from the day-90 math itself, as a second,
- *  independent safety margin. */
-const MIN_DAYS_SINCE_FINAL_WARNING = 7;
+/** However far behind schedule things get, an account is never deleted on
+ *  the strength of the final warning alone — it also needs at least one
+ *  EARLIER milestone (lapsed/day_30/day_60/day_80) that's had this many
+ *  days to actually reach someone. Deliberately not "day_89 itself is 7+
+ *  days old": day_89 is sent at day 89 and deletion is eligible from day
+ *  90, so that could never be true at the moment it's meant to gate — by
+ *  day 90 every earlier milestone that was ever sent is already well past
+ *  7 days old, so this reaches the same real-world safety margin without
+ *  the impossible condition. */
+const MIN_EARLIER_WARNING_AGE_DAYS = 7;
 /** A hard ceiling on how many accounts one run will ever delete — a cheap
  *  backstop against a clock bug or a mass-cancellation event quietly
  *  wiping out far more accounts than anyone intended in a single run. */
@@ -36,7 +41,7 @@ export interface DeletionWarningsRunSummary {
   deletionCandidates: number;
   deletionsSucceeded: number;
   deletionsSkippedCap: number;
-  deletionsSkippedNoFinalWarning: number;
+  deletionsSkippedInsufficientWarningHistory: number;
   deletionsSkippedReentitled: number;
   deletionsSkippedDisabled: number;
   errors: number;
@@ -51,7 +56,7 @@ function emptySummary(): DeletionWarningsRunSummary {
     deletionCandidates: 0,
     deletionsSucceeded: 0,
     deletionsSkippedCap: 0,
-    deletionsSkippedNoFinalWarning: 0,
+    deletionsSkippedInsufficientWarningHistory: 0,
     deletionsSkippedReentitled: 0,
     deletionsSkippedDisabled: 0,
     errors: 0,
@@ -222,17 +227,19 @@ export async function runDeletionWarningsJob(
 
   for (const { sub } of toDelete) {
     try {
-      const { data: finalWarning } = await admin
+      const { data: warningRows } = await admin
         .from("deletion_warning_log")
-        .select("sent_at")
-        .eq("user_id", sub.user_id)
-        .eq("milestone", "day_89")
-        .maybeSingle();
-      const finalWarningAge = finalWarning
-        ? Date.now() - new Date(finalWarning.sent_at).getTime()
-        : null;
-      if (finalWarningAge === null || finalWarningAge < MIN_DAYS_SINCE_FINAL_WARNING * 86_400_000) {
-        summary.deletionsSkippedNoFinalWarning++;
+        .select("milestone, sent_at")
+        .eq("user_id", sub.user_id);
+      const rows = warningRows ?? [];
+      const hasFinalWarning = rows.some((r) => r.milestone === "day_89");
+      const hasAgedEarlierWarning = rows.some(
+        (r) =>
+          r.milestone !== "day_89" &&
+          Date.now() - new Date(r.sent_at).getTime() >= MIN_EARLIER_WARNING_AGE_DAYS * 86_400_000
+      );
+      if (!hasFinalWarning || !hasAgedEarlierWarning) {
+        summary.deletionsSkippedInsufficientWarningHistory++;
         continue;
       }
 
@@ -255,10 +262,7 @@ export async function runDeletionWarningsJob(
         continue;
       }
 
-      const { data: userData } = await admin.auth.admin.getUserById(sub.user_id);
-      const email = userData?.user?.email ?? "unknown@booktight.co.uk";
-
-      await deleteAccountCore(sub.user_id, email, "auto_90_day");
+      await deleteAccountCore(sub.user_id, "auto_90_day");
       summary.deletionsSucceeded++;
     } catch (err) {
       Sentry.captureException(err, {

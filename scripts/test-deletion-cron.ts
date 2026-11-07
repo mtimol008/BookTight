@@ -3,8 +3,9 @@
 // without waiting 90 days or needing a live Resend key: a stub sendEmail is
 // injected instead of the real one, so the whole state machine (lapsing,
 // each warning milestone, the resubscribe-clears path, the cap, the
-// 7-day-since-final-warning gate, and the actual delete) is verified for
-// real against Supabase. Run with: npm run test:deletion-cron
+// day_89-plus-an-aged-earlier-warning deletion gate, and the actual
+// delete) is verified for real against Supabase. Run with:
+//   npm run test:deletion-cron
 //
 // Deletes every account it creates, even on failure.
 process.on("unhandledRejection", (reason) => {
@@ -150,29 +151,22 @@ async function phaseA_fullLifecycle() {
     check(`'${milestone}' milestone email sent at day ${days}`, stub.sent.some((s) => s.milestone === milestone));
   }
 
-  // Day 91: day_89 becomes due, but it's sent THIS run — too recent to
-  // delete on, even though days-since-lapse is already past 90.
+  // Day 91: day_89 becomes due and is sent this run. The earlier
+  // milestones (lapsed at day 0, day_30 at day 31, day_60 at day 61,
+  // day_80 at day 81) are already well past 7 days old by now, so the
+  // warning-history gate (see phaseD below for its own dedicated test) is
+  // already satisfied the moment day_89 goes out — only DELETION_ENABLED
+  // stands between this account and being deleted.
   await setLapsedAt(userId, daysAgo(91));
+  delete process.env.DELETION_ENABLED;
   stub = makeStubSendEmail();
   summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
   check("'day_89' milestone email sent at day 91", stub.sent.some((s) => s.milestone === "day_89"));
   check(
-    "deletion skipped — final warning too recent",
-    summary.deletionsSkippedNoFinalWarning === 1 && summary.deletionsSucceeded === 0
-  );
-  check("account not deleted yet", await userStillExists(userId));
-
-  // Backdate that same day_89 warning to 8 days ago — old enough — but
-  // DELETION_ENABLED is still off.
-  await insertWarningLog(userId, "day_89", daysAgo(8));
-  delete process.env.DELETION_ENABLED;
-  stub = makeStubSendEmail();
-  summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
-  check(
     "deletion skipped — DELETION_ENABLED is off",
     summary.deletionsSkippedDisabled === 1 && summary.deletionsSucceeded === 0
   );
-  check("account still not deleted while DELETION_ENABLED is off", await userStillExists(userId));
+  check("account not deleted while DELETION_ENABLED is off", await userStillExists(userId));
 
   // Flip it on for this process only and run once more.
   process.env.DELETION_ENABLED = "true";
@@ -250,6 +244,39 @@ async function phaseC_capAtFivePerRun() {
   }
 }
 
+async function phaseD_finalWarningGateNeedsAnAgedEarlierWarning() {
+  console.log("\n--- Phase D: deletion needs day_89 AND an aged earlier warning, not day_89 alone ---");
+  const { userId } = await createAccount();
+  await setLapsedAt(userId, daysAgo(90));
+  process.env.DELETION_ENABLED = "true";
+
+  // Case 1: day_89 sent, but no earlier milestone was ever logged for
+  // this account — must not delete, however old the lapse itself is.
+  await insertWarningLog(userId, "day_89", daysAgo(1));
+  let stub = makeStubSendEmail();
+  let summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  check(
+    "day_89 alone, no earlier warning: deletion skipped",
+    summary.deletionsSkippedInsufficientWarningHistory === 1 && summary.deletionsSucceeded === 0,
+    JSON.stringify(summary)
+  );
+  check("account still exists after day_89 alone", await userStillExists(userId));
+
+  // Case 2: add one earlier milestone, aged 7+ days — now it deletes, on
+  // day 90.
+  await insertWarningLog(userId, "day_80", daysAgo(8));
+  stub = makeStubSendEmail();
+  summary = await runDeletionWarningsJob({ sendEmail: stub.fn });
+  check(
+    "day_89 plus an aged earlier warning: deletes on day 90",
+    summary.deletionsSucceeded === 1,
+    JSON.stringify(summary)
+  );
+  check("account gone after the earlier warning is added", !(await userStillExists(userId)));
+
+  delete process.env.DELETION_ENABLED;
+}
+
 async function cleanupAnyRemaining() {
   for (const userId of createdUserIds) {
     if (await userStillExists(userId)) {
@@ -263,6 +290,7 @@ async function main() {
     await phaseA_fullLifecycle();
     await phaseB_resubscribeClears();
     await phaseC_capAtFivePerRun();
+    await phaseD_finalWarningGateNeedsAnAgedEarlierWarning();
   } finally {
     await cleanupAnyRemaining();
   }

@@ -26,11 +26,7 @@ export type DeletionReason = "user_requested" | "auto_90_day";
  * the Stripe customer is cleaned up best-effort, since the Supabase side is
  * already done and is what the caller actually asked for.
  */
-export async function deleteAccountCore(
-  userId: string,
-  email: string,
-  reason: DeletionReason
-): Promise<void> {
+export async function deleteAccountCore(userId: string, reason: DeletionReason): Promise<void> {
   const admin = createAdminClient();
   const subscription = await getSubscriptionByUserId(userId);
 
@@ -47,9 +43,11 @@ export async function deleteAccountCore(
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId);
 
+  // No email here — this is only ever a record that a deletion happened,
+  // not a place to keep hold of personal data past the deletion it's
+  // logging.
   const { error: logError } = await admin.from("account_deletion_log").insert({
     user_id: userId,
-    email,
     reason,
     jobs_count: jobsCount ?? 0,
   });
