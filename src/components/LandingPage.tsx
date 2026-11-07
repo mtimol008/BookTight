@@ -201,6 +201,9 @@ export function LandingPage() {
             <a className="landing-nav-link" href="#faq">
               FAQ
             </a>
+            <Link className="landing-nav-link" href="/help">
+              Help
+            </Link>
           </nav>
           <div className="landing-nav-actions">
             <Link className="btn btn--ghost btn--sm" href="/login">
@@ -447,6 +450,7 @@ export function LandingPage() {
             Booktight
           </Link>
           <nav aria-label="Legal and contact">
+            <Link href="/help">Help</Link>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
             <Link href="/contact">Contact</Link>

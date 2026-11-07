@@ -214,6 +214,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ) : null}
         {children}
         <p className="footer" style={{ marginTop: 28 }}>
+          <Link href="/help">Help</Link>
           <Link href="/contact">Send feedback</Link>
         </p>
       </main>

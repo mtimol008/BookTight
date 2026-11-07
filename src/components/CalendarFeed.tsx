@@ -117,62 +117,11 @@ export function CalendarFeedSection({ initialFeedState }: { initialFeedState: Ca
             </a>
           </form>
 
-          <details style={{ marginTop: 16 }}>
-            <summary className="btn--quiet" style={{ cursor: "pointer" }}>
-              How to add to your calendar app
-            </summary>
-            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <p className="field-label">Apple Calendar (iPhone/Mac)</p>
-                <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>
-                  <li>Open <strong>Settings</strong> → <strong>Apps</strong> → <strong>Calendar</strong></li>
-                  <li>Tap <strong>Calendar Accounts</strong> → <strong>Add Account</strong> → <strong>Other</strong></li>
-                  <li>Choose <strong>Add Subscribed Calendar</strong></li>
-                  <li>Paste the feed URL above → <strong>Next</strong> → <strong>Save</strong></li>
-                </ol>
-              </div>
-
-              <div>
-                <p className="field-label">Google Calendar (Web)</p>
-                <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>
-                  <li>Go to <a href="https://calendar.google.com" target="_blank" rel="noopener" className="text-route">calendar.google.com</a></li>
-                  <li>Next to &ldquo;Other calendars&rdquo;, click <strong>+</strong> → <strong>From URL</strong></li>
-                  <li>Paste the feed URL → <strong>Add calendar</strong></li>
-                </ol>
-              </div>
-
-              <div>
-                <p className="field-label">Outlook (Web / Windows / Mac)</p>
-                <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>
-                  <li>Open Outlook Calendar</li>
-                  <li>Click <strong>Add calendar</strong> → <strong>Subscribe from web</strong></li>
-                  <li>Paste the feed URL → Choose a name → <strong>Import</strong></li>
-                </ol>
-              </div>
-
-              <div>
-                <p className="field-label">Samsung Calendar (Galaxy phones)</p>
-                <p className="note" style={{ marginBottom: 8 }}>
-                  Samsung Calendar can&apos;t subscribe to a feed URL directly —
-                  add it to Google Calendar instead, and Samsung picks it up
-                  automatically through the Google account already synced on
-                  your phone.
-                </p>
-                <ol style={{ paddingLeft: 20, lineHeight: 1.8 }}>
-                  <li>On a computer, add the feed to Google Calendar using the steps above</li>
-                  <li>On your phone: <strong>Settings</strong> → <strong>Accounts and backup</strong> → <strong>Manage accounts</strong> → your Google account</li>
-                  <li>Make sure <strong>Calendar</strong> sync is turned on</li>
-                  <li>Open Samsung Calendar — the feed appears within a few minutes</li>
-                </ol>
-              </div>
-
-              <p className="note" style={{ marginBottom: 0 }}>
-                Your calendar app will refresh this feed automatically every few
-                hours. Changes in Booktight (new jobs, time changes,
-                cancellations) will appear on the next refresh.
-              </p>
-            </div>
-          </details>
+          <p style={{ marginTop: 16 }}>
+            <a href="/help#subscribing" className="btn--quiet">
+              How to add this to your calendar app →
+            </a>
+          </p>
         </>
       ) : (
         <form action={feedAction}>

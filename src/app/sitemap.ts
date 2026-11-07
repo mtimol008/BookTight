@@ -8,7 +8,7 @@ const SITE_URL = "https://booktight.co.uk";
 // since it's the same empty/signed-out shell for every visitor who isn't
 // already a user.
 export default function sitemap(): MetadataRoute.Sitemap {
-  const routes = ["", "/privacy", "/terms", "/contact"];
+  const routes = ["", "/privacy", "/terms", "/contact", "/help"];
 
   return routes.map((route) => ({
     url: `${SITE_URL}${route}`,

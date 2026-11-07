@@ -30,6 +30,7 @@ const PUBLIC_PATHS = [
   "/contact",
   "/privacy",
   "/terms",
+  "/help",
   // Stripe's servers POST here with no Supabase session at all — same
   // category as the calendar feed, authenticated by its own signature
   // instead (verified inside the route itself).
