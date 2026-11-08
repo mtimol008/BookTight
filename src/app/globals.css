@@ -948,11 +948,17 @@ body[data-field-focused="true"] .fab {
 .working-hours-day {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 92px;
   flex-shrink: 0;
   font-size: 14px;
   color: var(--text);
+}
+
+.working-hours-day input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .working-hours-row .btn-row {

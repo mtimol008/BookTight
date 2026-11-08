@@ -43,9 +43,14 @@ export default async function AcceptTermsPage({
         <form action={acceptUpdatedTerms}>
           <label
             className="field"
-            style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}
+            style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 10 }}
           >
-            <input type="checkbox" name="termsAccepted" required style={{ marginTop: 3 }} />
+            <input
+              type="checkbox"
+              name="termsAccepted"
+              required
+              style={{ width: 20, height: 20, flexShrink: 0 }}
+            />
             <span className="note" style={{ margin: 0 }}>
               I agree to the updated Terms of Service and Privacy Policy.
             </span>
