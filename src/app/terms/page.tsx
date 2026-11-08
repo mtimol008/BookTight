@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { TERMS_VERSION } from "@/lib/terms";
 
+// Before editing any claim below about backups, uptime, or a hosting
+// region: re-check it against what the ACTUAL plan tier in use that day
+// (Supabase, Vercel — both free/Hobby as of this writing) can really
+// deliver. See src/app/privacy/page.tsx's own version of this note for
+// the specific reason (Supabase's free tier has no automatic backups).
 export const metadata: Metadata = {
   title: "Terms of Service",
   description: "The terms for using Booktight.",

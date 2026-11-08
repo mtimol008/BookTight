@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "backup": "node --env-file=.env.local scripts/backup-database.mjs",
     "prebuild": "node scripts/check-env.mjs",
     "build": "next build",
     "start": "next start",
