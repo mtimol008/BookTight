@@ -7,13 +7,20 @@
 // delete) is verified for real against Supabase. Run with:
 //   npm run test:deletion-cron
 //
-// RUNS AGAINST THE LIVE, SHARED DATABASE — not a sandbox. Every call to
-// runDeletionWarningsJob() below passes onlyUserIds, scoped to only the
-// throwaway accounts this script just created, so it can never read or
-// write any other account's row (see runDeletionWarningsJob's own
-// comment). A run that ever processed every row, even read-only, found
-// and mutated 5 real accounts once already — see the commit that fixed
-// that. Deletes every account it creates, even on failure.
+// RUNS AGAINST A REAL, SHARED DATABASE — staging by default, never
+// production without an explicit, unambiguous override (see
+// scripts/lib/supabaseTarget.ts). Every call to runDeletionWarningsJob()
+// below ALSO passes onlyUserIds, scoped to only the throwaway accounts
+// this script just created, so even a run against production (should
+// someone force one) could never read or write any other account's row
+// (see runDeletionWarningsJob's own comment). A run that ever processed
+// every row, even read-only, found and mutated 5 real production accounts
+// once already — see the commit that fixed that; the target guard below
+// is the second, independent layer on top of that fix. Deletes every
+// account it creates, even on failure.
+//
+//   npm run test:deletion-cron                                    # staging
+//   npm run test:deletion-cron -- --target=production --i-really-mean-production
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled rejection:", reason);
   process.exitCode = 1;
@@ -21,10 +28,17 @@ process.on("unhandledRejection", (reason) => {
 
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { resolveTarget } from "./lib/supabaseTarget";
 import { createAdminClient } from "../src/lib/supabase/admin";
 import { runDeletionWarningsJob } from "../src/lib/deletionWarnings";
 import type { DeletionWarningMilestone } from "../src/lib/email";
 
+try {
+  resolveTarget();
+} catch (err) {
+  console.error((err as Error).message);
+  process.exit(1);
+}
 const admin = createAdminClient();
 const TERMS_VERSION = readFileSync("src/lib/terms.ts", "utf8").match(
   /TERMS_VERSION\s*=\s*"([^"]+)"/
