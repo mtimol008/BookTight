@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { EyeIcon, EyeOffIcon } from "@/components/icons";
+import { MIN_PASSWORD_LENGTH, passwordTooShortMessage } from "@/lib/password";
 
 type Status = "checking" | "ready" | "invalid" | "saved";
 
@@ -57,8 +58,8 @@ export function ResetPasswordForm() {
     event.preventDefault();
     setError(null);
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(passwordTooShortMessage());
       return;
     }
     if (password !== confirmPassword) {
@@ -116,7 +117,7 @@ export function ResetPasswordForm() {
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             required
-            minLength={6}
+            minLength={MIN_PASSWORD_LENGTH}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -142,7 +143,7 @@ export function ResetPasswordForm() {
           type={showPassword ? "text" : "password"}
           autoComplete="new-password"
           required
-          minLength={6}
+          minLength={MIN_PASSWORD_LENGTH}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
         />

@@ -38,7 +38,7 @@ export async function enableCalendarFeed(): Promise<CalendarFeedState> {
   revalidatePath("/account");
   return {
     feedUrl: `${baseUrl.replace(/\/$/, "")}/api/calendar/feed/${token}.ics`,
-    message: "Calendar feed enabled",
+    message: "Calendar feed enabled — this is a new link; update any calendar app using an older one.",
   };
 }
 
@@ -52,10 +52,16 @@ export async function disableCalendarFeed(): Promise<CalendarFeedState> {
     return { error: "Not logged in" };
   }
 
+  // Clears the token itself, not just the enabled flag — otherwise the
+  // exact same link silently works again if the feed is ever re-enabled,
+  // which defeats the point of disabling it to kill a leaked link.
+  // Enabling again always generates a fresh token (see enableCalendarFeed
+  // above), never reuses this one.
   const { error } = await supabase
     .from("profiles")
     .update({
       calendar_feed_enabled: false,
+      calendar_feed_token: null,
     })
     .eq("id", user.id);
 
@@ -64,7 +70,7 @@ export async function disableCalendarFeed(): Promise<CalendarFeedState> {
   }
 
   revalidatePath("/account");
-  return { message: "Calendar feed disabled" };
+  return { message: "Calendar feed disabled — that link no longer works. Enabling it again creates a new one." };
 }
 
 export async function regenerateCalendarFeedToken(): Promise<CalendarFeedState> {

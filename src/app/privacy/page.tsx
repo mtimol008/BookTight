@@ -2,6 +2,13 @@ import type { Metadata } from "next";
 import { Footer } from "@/components/Footer";
 import { TERMS_VERSION } from "@/lib/terms";
 
+// Before editing any claim below about backups, uptime, or a hosting
+// region: re-check it against what the ACTUAL plan tier in use that day
+// (Supabase, Vercel, Sentry — all free/Hobby as of this writing) can
+// really deliver, not what a paid tier would. The free Supabase tier
+// specifically has NO automatic backups at all — that's why section 8
+// talks about this project's own occasional manual backups
+// (scripts/backup-database.mjs) instead of a provider guarantee.
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: "How Booktight collects, uses and protects your data.",
@@ -164,8 +171,9 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>If you delete your account:</strong> we delete your profile and jobs
-              promptly. Copies in our provider&apos;s backups are kept for up to 7 days and then
-              expire.
+              promptly from our live database. We also keep occasional backups of the whole
+              database for disaster recovery only, which may still include your data for some
+              time afterwards &mdash; we never use a backup to restore a deleted account.
             </li>
             <li>
               <strong>If a paid subscription ends:</strong> you get read-only access and can

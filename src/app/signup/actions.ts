@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { checkIpRateLimit, getClientIp } from "@/lib/rateLimit";
 import { recordEvent } from "@/lib/analytics";
+import { MIN_PASSWORD_LENGTH, passwordTooShortMessage } from "@/lib/password";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
@@ -38,6 +39,12 @@ export async function signUp(
 
   if (!fullName || !email || !password || !confirmPassword || !homeAddress) {
     return { error: "Full name, email, password, confirmation, and home address are all required." };
+  }
+
+  // Server-side, not just the input's minLength — that's a UI hint a
+  // modified client could strip and submit a shorter password anyway.
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return { error: passwordTooShortMessage() };
   }
 
   if (password !== confirmPassword) {

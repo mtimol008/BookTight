@@ -14,7 +14,7 @@ import {
 } from "@/lib/jobs";
 import { getCurrentProfile, type EngagementState, type ProfileRecord } from "@/lib/profiles";
 import { getCurrentSubscription } from "@/lib/subscriptions";
-import { hasActiveEntitlement, READ_ONLY_MESSAGE } from "@/lib/entitlement";
+import { hasActiveEntitlement, effectiveLapsedAt, READ_ONLY_MESSAGE } from "@/lib/entitlement";
 import { isPaywallEnabled } from "@/lib/paywallConfig";
 import { recordEvent } from "@/lib/analytics";
 import { updateEngagementState } from "@/lib/engagement";
@@ -1032,9 +1032,16 @@ export interface BillingBannerState {
    *  whole 14-day span, so this isn't a nag from day one. */
   trialEndsAt: string | null;
   paymentFailed: boolean;
+  /** Days left before the 90-day deletion cron (src/lib/deletionWarnings.ts)
+   *  deletes this account, or null while it's still entitled. Mutually
+   *  exclusive with trialEndsAt and paymentFailed — past_due stays
+   *  entitled, and a trial that hasn't ended yet isn't lapsed — so only
+   *  one of the three banners below is ever live at once. */
+  deletionDaysLeft: number | null;
 }
 
 const TRIAL_BANNER_WINDOW_DAYS = 3;
+const DELETE_AFTER_DAYS = 90;
 
 /** Fetched once by AppShell, same pattern as getEngagementState — null
  *  while the paywall itself is off, since a trial deadline with no actual
@@ -1054,7 +1061,17 @@ export async function getBillingBannerState(): Promise<BillingBannerState | null
   // whose original trial_ends_at happens to still fall within the banner
   // window, must not see a nag it doesn't actually need to act on.
   if (subscription.comped_until && new Date(subscription.comped_until) > new Date()) {
-    return { trialEndsAt: null, paymentFailed: false };
+    return { trialEndsAt: null, paymentFailed: false, deletionDaysLeft: null };
+  }
+
+  if (!hasActiveEntitlement(subscription)) {
+    const lapsedAt = effectiveLapsedAt(subscription);
+    const daysSinceLapse = lapsedAt ? Math.floor((Date.now() - lapsedAt.getTime()) / 86_400_000) : 0;
+    return {
+      trialEndsAt: null,
+      paymentFailed: false,
+      deletionDaysLeft: Math.max(0, DELETE_AFTER_DAYS - daysSinceLapse),
+    };
   }
 
   const now = Date.now();
@@ -1070,6 +1087,7 @@ export async function getBillingBannerState(): Promise<BillingBannerState | null
   return {
     trialEndsAt: trialEndingSoon ? subscription.trial_ends_at : null,
     paymentFailed: subscription.status === "past_due",
+    deletionDaysLeft: null,
   };
 }
 

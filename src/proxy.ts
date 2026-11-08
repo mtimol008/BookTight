@@ -35,6 +35,9 @@ const PUBLIC_PATHS = [
   // category as the calendar feed, authenticated by its own signature
   // instead (verified inside the route itself).
   "/api/stripe/webhook",
+  // Vercel's cron scheduler hits this with no Supabase session either —
+  // authenticated by the CRON_SECRET header the route checks itself.
+  "/api/cron/deletion-warnings",
   // Next's generated metadata routes (src/app/sitemap.ts, robots.ts,
   // opengraph-image.tsx) — search crawlers and social-link unfurlers fetch
   // these with no session at all, same as the calendar feed above.

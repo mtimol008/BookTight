@@ -27,7 +27,17 @@ const required = [
   "STRIPE_WEBHOOK_SECRET",
   "STRIPE_PRICE_ID_MONTHLY",
   "STRIPE_PRICE_ID_YEARLY",
+  "RESEND_API_KEY",
+  "CRON_SECRET",
 ];
+
+// PAYWALL_LIVE_FROM is the floor under every account's deletion clock (see
+// src/lib/entitlement.ts effectiveLapsedAt) — only meaningful, so only
+// required, once the paywall is actually enforcing anything. Same
+// conditional-require shape as TURNSTILE_SECRET_KEY below.
+if (process.env.PAYWALL_ENABLED === "true") {
+  required.push("PAYWALL_LIVE_FROM");
+}
 
 // Turnstile verification is skipped entirely when the kill switch is on
 // (see src/lib/turnstileConfig.ts) — TURNSTILE_SECRET_KEY is pointless to

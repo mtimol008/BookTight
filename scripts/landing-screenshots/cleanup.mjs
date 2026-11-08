@@ -1,10 +1,13 @@
 // Deletes the throwaway demo account. Its profile, jobs, trial, analytics
 // events and geocode usage go with it (all cascade from the auth user); the
 // one shared row it added — the new job's cached geocode — is removed here.
-// Run: npm run screenshots:cleanup
+// Run:
+//   npm run screenshots:cleanup                                          # staging
+//   npm run screenshots:cleanup -- --target=production --i-really-mean-production
 import { createClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { STATE_FILE } from "./shared.mjs";
+import { resolveTarget } from "../lib/supabase-target.mjs";
 
 if (!existsSync(STATE_FILE)) {
   console.log("No demo account recorded — nothing to clean up.");
@@ -16,11 +19,14 @@ if (!/^landing-demo-[0-9a-f]+@example\.com$/.test(state.email)) {
   process.exit(1);
 }
 
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } },
-);
+let targetUrl, targetSecret;
+try {
+  ({ url: targetUrl, secretKey: targetSecret } = resolveTarget());
+} catch (err) {
+  console.error(err.message);
+  process.exit(1);
+}
+const admin = createClient(targetUrl, targetSecret, { auth: { persistSession: false, autoRefreshToken: false } });
 
 const { data: found, error: getError } = await admin.auth.admin.getUserById(state.userId);
 if (getError && getError.status !== 404) throw getError;

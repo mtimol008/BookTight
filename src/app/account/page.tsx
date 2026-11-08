@@ -241,7 +241,7 @@ export default async function AccountPage({
         </Link>
       </div>
 
-      <div className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
+      <div id="export" className="section-label" style={{ marginTop: 20, marginBottom: 8 }}>
         Your Data
       </div>
       <div className="card">

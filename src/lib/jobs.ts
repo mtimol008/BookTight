@@ -64,8 +64,19 @@ export async function getJobsForWeek(
 export async function getAllJobsForCurrentUser(): Promise<JobRecord[]> {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return [];
+  }
+
+  // Explicit user_id filter as a backstop alongside RLS — this feeds the
+  // data-export endpoint, so a future RLS regression here would otherwise
+  // have no second line of defense before it started handing out every
+  // account's jobs to whoever asked.
   const { data, error } = await withAuthRetry(() =>
-    supabase.from("jobs").select("*").order("date", { ascending: true })
+    supabase.from("jobs").select("*").eq("user_id", user.id).order("date", { ascending: true })
   );
 
   if (error) {
@@ -126,14 +137,25 @@ export async function getJobsForWeekByUserId(
 }
 
 /** One job by id — used to compare against an incoming edit's date/time
- *  before deciding whether a manual_position override still applies. */
+ *  before deciding whether a manual_position override still applies.
+ *  Explicit user_id filter as a backstop alongside RLS, same reasoning as
+ *  getAllJobsForCurrentUser — a caller-supplied id with only RLS standing
+ *  between it and another account's row is worth a second check. */
 export async function getJobById(id: string): Promise<JobRecord | null> {
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return null;
+  }
 
   const { data, error } = await supabase
     .from("jobs")
     .select("*")
     .eq("id", id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (error) {

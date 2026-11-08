@@ -1,22 +1,29 @@
 // Creates the throwaway demo account used for the landing-page screenshots
 // and fills its week with invented jobs. Run:
-//   npm run screenshots:seed
+//   npm run screenshots:seed                                             # staging
+//   npm run screenshots:seed -- --target=production --i-really-mean-production
 // Then `npm run screenshots:capture`, then `npm run screenshots:cleanup`.
+// Only ever touches the one account it creates (every write below is
+// scoped to that user_id) — lower blast radius than a full-table scan,
+// but still real writes against a real project, so it gets the same
+// staging-by-default guard as every other throwaway-account script.
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
 import { DEMO_JOBS, DEMO_NEW_JOB, DEMO_PROFILE, DEMO_TIMEZONE, HINT_IDS } from "./demo-data.mjs";
 import { STATE_FILE, TERMS_VERSION, mondayOfThisWeek, addDays } from "./shared.mjs";
+import { resolveTarget } from "../lib/supabase-target.mjs";
 
 if (existsSync(STATE_FILE)) {
   console.error("A demo account already exists. Run `npm run screenshots:cleanup` first.");
   process.exit(1);
 }
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const secret = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!url || !secret) {
-  console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY in .env.local.");
+let url, secret;
+try {
+  ({ url, secretKey: secret } = resolveTarget());
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
 const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
