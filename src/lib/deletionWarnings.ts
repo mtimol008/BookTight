@@ -210,7 +210,8 @@ export async function runDeletionWarningsJob(
             throw new Error(userError?.message ?? "No email on file for this account");
           }
           const daysLeft = Math.max(0, DELETE_AFTER_DAYS - daysSinceLapse);
-          await sendEmail(email, milestone.key, { daysLeft });
+          const deletionDate = new Date(lapsedAt.getTime() + DELETE_AFTER_DAYS * 86_400_000);
+          await sendEmail(email, milestone.key, { daysLeft, deletionDate });
           summary.warningsSent[milestone.key]++;
         } catch (err) {
           await admin
