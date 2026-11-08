@@ -4,7 +4,8 @@ import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "Help",
-  description: "How Booktight's suggestions work, and how to subscribe to your calendar feed.",
+  description:
+    "How Booktight's suggestions work, adding it to your Home Screen, and subscribing to your calendar feed.",
 };
 
 export default function HelpPage() {
@@ -19,7 +20,7 @@ export default function HelpPage() {
 
       <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
         <h1 className="screen-title" style={{ marginBottom: 10 }}>Help</h1>
-        <p className="legal-meta">Last updated: 7 November 2026</p>
+        <p className="legal-meta">Last updated: 8 November 2026</p>
 
         <div className="legal-doc">
           <h2>1. How suggestions work</h2>
@@ -71,7 +72,47 @@ export default function HelpPage() {
             just a heads-up before you commit.
           </p>
 
-          <h2 id="subscribing">2. Subscribing to your calendar feed</h2>
+          <h2 id="home-screen">2. Add Booktight to your Home Screen</h2>
+          <p>
+            Booktight works like an app once it&apos;s on your phone&apos;s Home Screen — no App
+            Store needed, since it&apos;s a web app you add directly from your browser.
+          </p>
+
+          <h3>iPhone (Safari)</h3>
+          <p className="note" style={{ marginBottom: 8 }}>
+            This only works in Safari — not Chrome or another browser on iPhone.
+          </p>
+          <ol>
+            <li>Open Booktight in the <strong>Safari</strong> app.</li>
+            <li>
+              Tap the <strong>Share</strong> icon (the square with an arrow pointing up).
+            </li>
+            <li>
+              Scroll down the list of options and tap <strong>Add to Home Screen</strong>. If you
+              don&apos;t see it, tap <strong>Edit Actions</strong> at the bottom of the list first,
+              then add it from there.
+            </li>
+            <li>
+              Leave <strong>Open as Web App</strong> on for a full-screen icon, or turn it off for a
+              regular bookmark.
+            </li>
+            <li>Tap <strong>Add</strong>.</li>
+          </ol>
+
+          <h3>Android (Chrome)</h3>
+          <ol>
+            <li>Open Booktight in <strong>Chrome</strong>.</li>
+            <li>
+              Tap the three-dot menu on the right of the address bar.
+            </li>
+            <li>
+              Tap <strong>Install and create shortcut</strong> (some versions of Chrome show this
+              as <strong>Add to Home screen</strong> instead), then <strong>Install</strong>.
+            </li>
+            <li>Follow the on-screen instructions.</li>
+          </ol>
+
+          <h2 id="subscribing">3. Subscribing to your calendar feed</h2>
           <p>
             In Account, turning on the calendar feed gives you a private web address that your
             phone or computer&apos;s calendar app can check periodically and show your Booktight
@@ -150,7 +191,7 @@ export default function HelpPage() {
             Microsoft&apos;s own guidance says it can occasionally take over a day.
           </p>
 
-          <h2>3. Troubleshooting</h2>
+          <h2>4. Troubleshooting</h2>
           <h3>The feed isn&apos;t showing a change I just made</h3>
           <p>
             This is almost always just timing — your calendar app checks the feed on its own
@@ -175,7 +216,7 @@ export default function HelpPage() {
             subscribe to.
           </p>
 
-          <h2>4. Contact</h2>
+          <h2>5. Contact</h2>
           <p>
             Something not covered here, or not working the way it should? Email{" "}
             <a href="mailto:support@booktight.co.uk">support@booktight.co.uk</a>, or use{" "}

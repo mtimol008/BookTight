@@ -111,7 +111,9 @@ Saves one JSON file per table, plus `auth_users.json`, to a new timestamped fold
 
 ### Switching on the paywall
 
-Two steps, **in this order** — reversing them means some accounts' trials start before others', instead of everyone's starting together on the same day:
+**Ship the paid-plan Terms first** — `src/app/terms/page.draft-paid-plan.tsx` is the drafted, ready-to-go replacement (pricing, trial, cancellation, refunds, what happens when access lapses — see its own top comment for the exact steps: bump `TERMS_VERSION` in `src/lib/terms.ts`, delete the current `page.tsx`, rename the draft to `page.tsx`). Do this before or alongside the steps below, not after — existing accounts should see the real terms before their trial clock starts under them, and bumping `TERMS_VERSION` is what triggers the app's existing re-accept prompt (`src/app/accept-terms`) for every account that hasn't agreed to the new version yet.
+
+Then, two steps, **in this order** — reversing them means some accounts' trials start before others', instead of everyone's starting together on the same day:
 
 1. **Run this once, by hand, in the Supabase SQL Editor** — sets every existing account's trial to start right now:
 
