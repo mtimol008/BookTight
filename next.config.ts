@@ -10,24 +10,26 @@ const sentryOrigin = process.env.NEXT_PUBLIC_SENTRY_DSN
   ? new URL(process.env.NEXT_PUBLIC_SENTRY_DSN).origin
   : "";
 
-// Report-only for now (security review finding #5) — this collects
-// violation reports in the browser console without blocking anything, so
-// it can be checked against real traffic (Turnstile's widget/iframe,
-// Sentry's own beacon calls, Next's own hydration scripts) before ever
-// switching to enforcing. Deliberately NOT nonce-based: Next's documented
-// nonce pattern requires every page to opt out of static rendering, which
-// would be a real, unrequested performance change for several of this
-// app's pages (login, signup, forgot-password, reset-password are all
-// static today) — flagging that trade-off rather than accepting it
-// silently. 'unsafe-inline' here means this CSP does NOT yet block
-// inline-script injection — it's a monitoring baseline, not the fix for
-// the cookie/XSS exposure the same review flagged.
+// Enforced on Vercel Preview deployments only, for now — Production stays
+// report-only until a run on Preview confirms nothing legitimate gets
+// blocked (see the commit that added this). 'unsafe-inline' on script-src
+// is unchanged either way: Next streams the RSC payload and hydration data
+// through inline <script> tags on every page, and removing it needs the
+// documented nonce approach, which forces every currently-static page
+// (login, signup, forgot-password, reset-password) into dynamic rendering
+// — a real, unrequested performance trade-off, not something to flip
+// silently while tightening enforcement. Enforcing therefore does NOT yet
+// block inline-script injection; it's real, meaningful hardening for
+// everything else (object-src, base-uri, form-action, frame-src, blocking
+// any resource from a domain not on this list at all), just not that one
+// specific gap.
 // React's dev-mode debugging and Turbopack's HMR runtime both use eval() —
 // confirmed as a dev-only need (Next's own CSP guide makes the same
 // exception), not something production traffic should ever allow.
 const isDev = process.env.NODE_ENV === "development";
+const isVercelPreview = process.env.VERCEL_ENV === "preview";
 
-const cspReportOnly = [
+const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
@@ -47,6 +49,14 @@ const cspReportOnly = [
   "report-uri /api/csp-report",
 ]
   .join("; ");
+
+// Same policy either way — only whether the browser actually enforces it
+// differs. Report-Only never blocks anything, just logs; Preview is the
+// one place it's enforced for real before Production gets the same
+// treatment.
+const cspHeaderKey = isVercelPreview
+  ? "Content-Security-Policy"
+  : "Content-Security-Policy-Report-Only";
 
 const nextConfig: NextConfig = {
   // Lets other devices on the home network load dev resources (HMR etc.)
@@ -84,7 +94,7 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
+          { key: cspHeaderKey, value: csp },
         ],
       },
     ];
