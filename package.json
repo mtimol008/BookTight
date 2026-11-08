@@ -10,6 +10,7 @@
     "lint": "eslint",
     "test:scheduling": "tsx scripts/test-scheduling.ts",
     "test:deletion-cron": "tsx --env-file=.env.local scripts/test-deletion-cron.ts",
+    "test:deletion-cron-route": "node --env-file=.env.local scripts/test-deletion-cron-route.mjs",
     "screenshots:seed": "node --env-file=.env.local scripts/landing-screenshots/seed.mjs",
     "screenshots:capture": "node --env-file=.env.local scripts/landing-screenshots/capture.mjs",
     "screenshots:cleanup": "node --env-file=.env.local scripts/landing-screenshots/cleanup.mjs"

@@ -34,6 +34,12 @@ const MAX_DELETIONS_PER_RUN = 5;
 type SendEmailFn = typeof sendDeletionWarningEmail;
 
 export interface DeletionWarningsRunSummary {
+  /** Set, with every other field left at zero and NOT ONE DATABASE CALL
+   *  made, when the paywall itself is off — there's nothing to warn or
+   *  delete anyone over yet, and scanning the whole table to confirm that
+   *  every run would be pure, pointless risk. null means the run actually
+   *  happened. */
+  skippedReason: "paywall-disabled" | null;
   checked: number;
   newlyLapsed: number;
   clearedResubscribed: number;
@@ -49,6 +55,7 @@ export interface DeletionWarningsRunSummary {
 
 function emptySummary(): DeletionWarningsRunSummary {
   return {
+    skippedReason: null,
     checked: 0,
     newlyLapsed: 0,
     clearedResubscribed: 0,
@@ -91,16 +98,26 @@ interface DeletionCandidate {
  * run against the real, shared database can never touch anyone else's
  * account. The real cron (the GET route) never passes it, since production
  * genuinely does need to scan every account.
+ *
+ * Returns immediately with skippedReason set, before creating even a
+ * Supabase client, while the paywall itself is off — hasActiveEntitlement
+ * would say everyone's entitled anyway, so this is just skipping a
+ * full-table read that could only ever conclude "nothing to do" (see
+ * skippedReason's own comment).
  */
 export async function runDeletionWarningsJob(
   opts: { dryRun?: boolean; sendEmail?: SendEmailFn; onlyUserIds?: string[] } = {}
 ): Promise<DeletionWarningsRunSummary> {
+  if (!isPaywallEnabled()) {
+    return { ...emptySummary(), skippedReason: "paywall-disabled" };
+  }
+
   const dryRun = opts.dryRun ?? false;
   const sendEmail = opts.sendEmail ?? sendDeletionWarningEmail;
 
   // This combination must never run quietly: every lapse date computed
   // below would be wrong (see effectiveLapsedAt's own comment).
-  if (isPaywallEnabled() && !process.env.PAYWALL_LIVE_FROM) {
+  if (!process.env.PAYWALL_LIVE_FROM) {
     throw new Error("PAYWALL_ENABLED is true but PAYWALL_LIVE_FROM is not set.");
   }
 

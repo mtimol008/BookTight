@@ -7,7 +7,13 @@
 // delete) is verified for real against Supabase. Run with:
 //   npm run test:deletion-cron
 //
-// Deletes every account it creates, even on failure.
+// RUNS AGAINST THE LIVE, SHARED DATABASE — not a sandbox. Every call to
+// runDeletionWarningsJob() below passes onlyUserIds, scoped to only the
+// throwaway accounts this script just created, so it can never read or
+// write any other account's row (see runDeletionWarningsJob's own
+// comment). A run that ever processed every row, even read-only, found
+// and mutated 5 real accounts once already — see the commit that fixed
+// that. Deletes every account it creates, even on failure.
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled rejection:", reason);
   process.exitCode = 1;

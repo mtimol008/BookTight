@@ -11,6 +11,11 @@ export const dynamic = "force-dynamic";
  * ?dryRun=true runs every read and decision with no writes at all (no
  * email sent, no lapsed_at set/cleared, no warning claimed, no account
  * deleted) — for a manual check against real data with no side effects.
+ *
+ * While PAYWALL_ENABLED is off, the response is just
+ * {"skippedReason":"paywall-disabled", ...all zeros} — runDeletionWarningsJob
+ * returns that before it ever touches the database, so this never scans
+ * subscriptions on PAYWALL_ENABLED's account alone.
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
