@@ -121,7 +121,11 @@ Two steps, **in this order** — reversing them means some accounts' trials star
 
    This covers every account that existed before this point, including ones that signed up between the `subscriptions` migration landing and today (their trigger-set `trial_ends_at` gets overwritten here too) — "existing accounts' trial starts the day the paywall switches on" means *this* moment, not whenever each of them happened to sign up.
 
-2. **Only after that's run**, set `PAYWALL_ENABLED=true` in Vercel (Production), then **redeploy** — this is a server-only env var read at request time, not build time, but Vercel only picks up a changed env var on the next deploy, not on existing running instances. Before this, `hasActiveEntitlement()` always returns `true` regardless of what's in `subscriptions` — the whole system can sit there inert, including new signups quietly accumulating a real `trial_ends_at` from the moment the migration ran, with zero effect until this flag flips.
+2. **Only after that's run**, in Vercel (Production), set both:
+   - `PAYWALL_ENABLED=true`
+   - `PAYWALL_LIVE_FROM` to today's date (e.g. `2026-12-01`) — the floor under every account's 90-day deletion clock (see `effectiveLapsedAt` in `src/lib/entitlement.ts`), so an account whose `trial_ends_at` is years in the past from before this switch-on can never look like it lapsed before the paywall even existed. **Required**: the build itself fails without it once `PAYWALL_ENABLED=true` (`scripts/check-env.mjs`).
+
+   Then **redeploy** — both are server-only env vars read at request time, not build time, but Vercel only picks up a changed env var on the next deploy, not on existing running instances. Before this, `hasActiveEntitlement()` always returns `true` regardless of what's in `subscriptions` — the whole system can sit there inert, including new signups quietly accumulating a real `trial_ends_at` from the moment the migration ran, with zero effect until this flag flips.
 
 ### Going live (switching Stripe from test mode to live)
 
