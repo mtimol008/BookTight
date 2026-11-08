@@ -16,6 +16,10 @@ export interface TargetCredentials {
   target: SupabaseTarget;
   url: string;
   secretKey: string;
+  /** Non-secret — safe to log, safe in a browser bundle. Only resolved when
+   *  present (not every caller needs it), so still undefined if the
+   *  corresponding env var is unset. */
+  publishableKey: string | undefined;
 }
 
 export function resolveTarget(argv: string[] = process.argv.slice(2)): TargetCredentials {
@@ -60,11 +64,19 @@ export function resolveTarget(argv: string[] = process.argv.slice(2)): TargetCre
   // names in this process's own env for staging, so the real code under
   // test transparently talks to staging without knowing it exists. Never
   // touches .env.local itself — only this process's in-memory env.
+  const publishableKey =
+    target === "staging"
+      ? process.env.STAGING_SUPABASE_PUBLISHABLE_KEY
+      : process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
   if (target === "staging") {
     process.env.NEXT_PUBLIC_SUPABASE_URL = url;
     process.env.SUPABASE_SECRET_KEY = secretKey;
+    if (publishableKey) {
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishableKey;
+    }
   }
 
   console.log(`Target: ${target} (${expectedRef})`);
-  return { target, url, secretKey };
+  return { target, url, secretKey, publishableKey };
 }

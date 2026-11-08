@@ -1,7 +1,22 @@
 import * as Sentry from "@sentry/nextjs";
+import { timingSafeEqual } from "node:crypto";
 import { runDeletionWarningsJob } from "@/lib/deletionWarnings";
 
 export const dynamic = "force-dynamic";
+
+/** Plain `!==` on a bearer token leaks its length (and, in principle, a
+ *  byte-by-byte timing signal) to whoever can measure response latency —
+ *  timingSafeEqual needs equal-length buffers or it throws, so a length
+ *  mismatch is treated as "not equal" up front rather than letting that
+ *  throw become its own timing tell. */
+function constantTimeEquals(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
 
 /**
  * Runs once a day via the "crons" entry in vercel.json. Vercel sends every
@@ -18,8 +33,8 @@ export const dynamic = "force-dynamic";
  * subscriptions on PAYWALL_ENABLED's account alone.
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const authHeader = request.headers.get("authorization") ?? "";
+  if (!constantTimeEquals(authHeader, `Bearer ${process.env.CRON_SECRET}`)) {
     return new Response("Unauthorized", { status: 401 });
   }
 

@@ -7,6 +7,7 @@ import { EyeIcon, EyeOffIcon, PinIcon } from "@/components/icons";
 import { Turnstile } from "@/components/Turnstile";
 import { isTurnstileDisabled } from "@/lib/turnstileConfig";
 import { TERMS_VERSION } from "@/lib/terms";
+import { MIN_PASSWORD_LENGTH } from "@/lib/password";
 import type { AddressSuggestion } from "@/lib/geocoding";
 
 const initialState: SignUpState = {};
@@ -131,10 +132,10 @@ export function SignUpForm() {
             className="input"
             type={showPassword ? "text" : "password"}
             name="password"
-            placeholder="At least 6 characters"
+            placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
             autoComplete="new-password"
             required
-            minLength={6}
+            minLength={MIN_PASSWORD_LENGTH}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -163,7 +164,7 @@ export function SignUpForm() {
             placeholder="Repeat your password"
             autoComplete="new-password"
             required
-            minLength={6}
+            minLength={MIN_PASSWORD_LENGTH}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
