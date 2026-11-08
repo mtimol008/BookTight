@@ -95,6 +95,20 @@ npx supabase db push --project-ref itijkrefaugbpagamxqr
 
 If anything in step 2 looks wrong — more than the expected migration(s) listed, or output that doesn't match the file you just wrote — stop and investigate before running step 3.
 
+### Backing up the database
+
+The free Supabase tier keeps no automatic backups of its own at all — Pro adds 7 days of daily backups, but until that's worth paying for, this project backs itself up by hand instead:
+
+```bash
+npm run backup
+```
+
+Saves one JSON file per table, plus `auth_users.json`, to a new timestamped folder under `~/Desktop/booktight-backups/` (same folder earlier manual backups already used). Run it regularly — weekly is reasonable at this scale — and keep the resulting folder somewhere that isn't just this one computer (a second drive, cloud storage). See `scripts/backup-database.mjs`'s own comments for the override env var and exactly what it covers.
+
+### Before switching anything on: check the legal pages still match reality
+
+`src/app/terms/page.tsx` and `src/app/privacy/page.tsx` both carry a comment at the top of the file for this reason: re-read any claim about backups, uptime, or a hosting region against whatever plan tier is *actually* running that day — not a tier that would be nice to have. (A backup-retention promise in Privacy section 8 was found inaccurate for exactly this reason once, and fixed — see that section for the current, accurate wording.) Do this check again before switching on the paywall, and again before going live, since both are moments the business is making a bigger promise to more people.
+
 ### Switching on the paywall
 
 Two steps, **in this order** — reversing them means some accounts' trials start before others', instead of everyone's starting together on the same day:
@@ -117,3 +131,11 @@ Everything up to this point — the Product, both Prices, the webhook endpoint, 
 2. Re-apply the same Customer Portal settings (cancellation, payment methods, invoice history, business info, links to `/terms`/`/privacy`) in live mode — the Dashboard's test and live mode portal configurations are separate too.
 3. Swap all four vars in Vercel (Production **and** Preview) to their live-mode values: `STRIPE_SECRET_KEY` (`sk_live_...`), `STRIPE_WEBHOOK_SECRET` (the live endpoint's own signing secret), `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_YEARLY` (the live Price IDs from step 1).
 4. Redeploy.
+
+### When revenue arrives (not required for switch-on or going live)
+
+These cost money and aren't needed to run on the free/Hobby tiers above — do them once there's actual subscription revenue to justify them, in this order:
+
+1. **Supabase Pro** — first, since it's what actually closes the backup gap above (automatic daily backups, point-in-time recovery) rather than just adding headroom.
+2. **Vercel Pro** — once traffic or team needs outgrow Hobby's limits.
+3. **Register with the ICO** (the UK data protection fee, ico.org.uk) — a business-registration step, not a technical one; needs doing once this stops being a free beta with no revenue. Note this is separate from the Privacy Policy's existing mentions of the ICO as a complaints body (section 9/10) — those are a legal right for users regardless of registration status, and don't need to wait for this.
