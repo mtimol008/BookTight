@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { BackIcon } from "@/components/icons";
 import { DeleteAccountForm } from "@/components/DeleteAccountForm";
 import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = {
+  title: "Delete account",
+};
 
 export default async function DeleteAccountPage() {
   const supabase = await createClient();

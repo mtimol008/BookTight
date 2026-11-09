@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
@@ -21,6 +22,10 @@ import { getCurrentProfileWithUser } from "@/lib/profiles";
 import { buildFeedUrl } from "@/lib/calendarFeed";
 import { formatDistance } from "@/lib/format";
 import { formatMinutesAsClock, parseTimeToMinutes, WEEKDAY_KEYS } from "@/lib/scheduling";
+
+export const metadata: Metadata = {
+  title: "Account",
+};
 
 /**
  * One-line summary of a per-day working-hours map. When every enabled day

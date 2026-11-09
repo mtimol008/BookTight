@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { BackIcon } from "@/components/icons";
 import { BusinessRulesEditForm } from "@/components/BusinessRulesEditForm";
 import { getCurrentProfile } from "@/lib/profiles";
+
+export const metadata: Metadata = {
+  title: "Business rules",
+};
 
 export default async function EditBusinessRulesPage() {
   const profile = await getCurrentProfile();

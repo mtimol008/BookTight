@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { BackIcon } from "@/components/icons";
 import { NewJobForm } from "@/components/NewJobForm";
 import { getTotalJobCount } from "@/lib/jobs";
 import { getCurrentProfile } from "@/lib/profiles";
+
+export const metadata: Metadata = {
+  title: "Add a job",
+};
 
 /** Below this all-time job count, "Add another job" offers a fast path
  *  back into a fresh form instead of returning to This Week — a founder

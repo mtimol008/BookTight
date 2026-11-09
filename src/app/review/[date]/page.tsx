@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
@@ -6,6 +7,15 @@ import { BackIcon } from "@/components/icons";
 import { formatDayTitle } from "@/lib/format";
 import { getScheduledJobsForDate } from "@/lib/jobs";
 import { getCurrentProfile } from "@/lib/profiles";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ date: string }>;
+}): Promise<Metadata> {
+  const { date } = await params;
+  return { title: `Review ${formatDayTitle(date)}` };
+}
 
 export default async function ReviewPage({
   params,

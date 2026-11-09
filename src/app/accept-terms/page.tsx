@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/profiles";
 import { TERMS_VERSION } from "@/lib/terms";
 import { acceptUpdatedTerms } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Accept updated terms",
+};
 
 export default async function AcceptTermsPage({
   searchParams,

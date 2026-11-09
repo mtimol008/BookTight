@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { OnboardingForm } from "@/components/OnboardingForm";
 import { getCurrentProfile } from "@/lib/profiles";
+
+export const metadata: Metadata = {
+  title: "Set up your account",
+};
 
 export default async function OnboardingPage() {
   const profile = await getCurrentProfile();
