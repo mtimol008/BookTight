@@ -136,6 +136,7 @@ async function handleEvent(admin: AdminClient, event: Stripe.Event): Promise<voi
           plan: priceIdToPlan(item?.price.id),
           current_period_end: item ? new Date(item.current_period_end * 1000).toISOString() : null,
           cancel_at_period_end: subscription.cancel_at_period_end,
+          cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
           updated_at: new Date().toISOString(),
         })
         .eq("user_id", userId);

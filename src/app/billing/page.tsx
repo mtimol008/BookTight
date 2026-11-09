@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { getCurrentSubscription } from "@/lib/subscriptions";
 import { createCheckoutSession, createPortalSession } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Billing",
+};
 
 const ALREADY_SUBSCRIBED_STATUSES = ["trialing", "active", "past_due"];
 
@@ -68,12 +73,21 @@ export default async function BillingPage({
             <p className="note" style={{ marginTop: 4 }}>
               {STATUS_LABELS[subscription.status ?? ""] ?? subscription.status}
             </p>
-            {subscription.current_period_end && (
-              <p className="note">
-                {subscription.cancel_at_period_end ? "Cancels" : "Renews"} on{" "}
-                {formatDate(subscription.current_period_end)}
-              </p>
-            )}
+            {(() => {
+              // A Billing Portal cancel-at-period-end sets cancel_at (a
+              // specific timestamp), not cancel_at_period_end — Stripe
+              // confirmed live. Treat either as cancelling, and prefer
+              // cancel_at as the date shown, since it's the actual moment
+              // Stripe will end access.
+              const isCancelling = subscription.cancel_at_period_end || !!subscription.cancel_at;
+              const endDate = subscription.cancel_at ?? subscription.current_period_end;
+              if (!endDate) return null;
+              return (
+                <p className="note">
+                  {isCancelling ? "Cancels" : "Renews"} on {formatDate(endDate)}
+                </p>
+              );
+            })()}
             <form action={createPortalSession} style={{ marginTop: 16 }}>
               <button type="submit" className="btn btn--primary btn--block">
                 Manage billing

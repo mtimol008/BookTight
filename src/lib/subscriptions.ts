@@ -25,6 +25,13 @@ export interface SubscriptionRecord {
   plan: SubscriptionPlan | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
+  /** Set when Stripe's own subscription.cancel_at is set — a Billing
+   *  Portal cancel-at-period-end sets this (a specific timestamp) rather
+   *  than cancel_at_period_end, confirmed against a real test-mode
+   *  cancellation. Treat this as cancelling too, and prefer it over
+   *  current_period_end as the date shown, since it's the actual moment
+   *  Stripe will end access. */
+  cancel_at: string | null;
   /** This app's own no-card trial clock — independent of Stripe. Null for
    *  every account that existed before the paywall switch-on day, until
    *  that day's one-time backfill sets it. */
