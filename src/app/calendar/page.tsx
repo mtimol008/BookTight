@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { DayRouteSummary, type DayRouteSummaryStop } from "@/components/DayRouteSummary";
@@ -16,6 +17,10 @@ import {
   parseMonthParam,
   shiftMonth,
 } from "@/lib/week";
+
+export const metadata: Metadata = {
+  title: "Calendar",
+};
 
 /** A day's real visit order via the same planDayRoute the This Week and
  *  Add a Job flows already use — no home means no anchor for a route, so

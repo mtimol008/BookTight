@@ -64,9 +64,18 @@ export function DayRouteSummary({
             {stops.length} stop{stops.length === 1 ? "" : "s"}
           </span>
         </div>
-        {reviewStatus === "needs-review" && (
+        {reviewStatus === "needs-review" ? (
           <Link href={`/review/${date}`} className="btn btn--warning btn--sm btn--pill">
             Review
+          </Link>
+        ) : (
+          // Calendar's own view is read-only — this is the way back into
+          // This Week's editable table, landed on the week that contains
+          // this exact day (parseWeekParam snaps any date to its Monday),
+          // so a job booked weeks out is actually reachable to edit,
+          // reschedule or cancel, not just visible here.
+          <Link href={`/?week=${date}`} className="btn btn--outline btn--sm btn--pill">
+            Edit this week
           </Link>
         )}
       </div>

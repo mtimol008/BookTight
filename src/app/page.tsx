@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { LandingPage } from "@/components/LandingPage";
-import { AccountCircleIcon, PlusIcon } from "@/components/icons";
+import { AccountCircleIcon, BackIcon, ForwardIcon, PlusIcon } from "@/components/icons";
 import JobsTableClient from "@/components/JobsTableClient";
 import type { DayPlan } from "@/components/JobsTable";
 import { formatDateRange, formatShortDate } from "@/lib/format";
@@ -18,9 +18,12 @@ import { recordEvent } from "@/lib/analytics";
 import { planDayRoute, type ExistingJob, type TimeSlotType } from "@/lib/scheduling";
 import { TERMS_VERSION } from "@/lib/terms";
 import {
+  formatWeekParam,
   getCurrentWeekRange,
   getTodayDateString,
   getTodayDateStringInTimezone,
+  parseWeekParam,
+  shiftWeek,
 } from "@/lib/week";
 
 /**
@@ -103,7 +106,11 @@ function daysSince(isoTimestamp: string, referenceNow: Date = new Date()): numbe
   return (referenceNow.getTime() - new Date(isoTimestamp).getTime()) / 86_400_000;
 }
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
   // "/" is now reachable signed out too (see proxy.ts) — a visitor with no
   // profile gets the marketing landing page instead of the app itself,
   // before any of the app's own data fetching below ever runs.
@@ -112,7 +119,18 @@ export default async function Home() {
     return <LandingPage />;
   }
 
-  const { startDate, endDate } = getCurrentWeekRange();
+  // Any date within the week to show — defaults to today, so a plain "/"
+  // behaves exactly as before. Jobs booked for a future (or past) week
+  // were previously only reachable by hand-editing the date on an
+  // existing job; this is what makes them viewable and editable at all.
+  const { week: weekParam } = await searchParams;
+  const weekDate = parseWeekParam(weekParam);
+  const { startDate, endDate } = getCurrentWeekRange(weekDate);
+  const currentWeek = getCurrentWeekRange();
+  const isCurrentWeek = startDate === currentWeek.startDate;
+  const prevWeekHref = `/?week=${formatWeekParam(shiftWeek(weekDate, -1))}`;
+  const nextWeekHref = `/?week=${formatWeekParam(shiftWeek(weekDate, 1))}`;
+
   const today = profile
     ? getTodayDateStringInTimezone(profile.timezone)
     : getTodayDateString();
@@ -173,16 +191,26 @@ export default async function Home() {
     <AppShell>
       <h1 className="sr-only">This Week</h1>
       <div className="screen-head">
-        <div>
-          <div className="wordmark">Booktight</div>
-          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-            {formatDateRange(startDate, endDate)}
-          </div>
-        </div>
+        <div className="wordmark">Booktight</div>
         <Link href="/account" className="icon-btn" aria-label="Account">
           <AccountCircleIcon />
         </Link>
       </div>
+
+      <div className="month-nav" style={{ marginTop: 16 }}>
+        <Link href={prevWeekHref} className="icon-btn" aria-label="Previous week">
+          <BackIcon />
+        </Link>
+        <span className="month-title">{formatDateRange(startDate, endDate)}</span>
+        <Link href={nextWeekHref} className="icon-btn" aria-label="Next week">
+          <ForwardIcon />
+        </Link>
+      </div>
+      {!isCurrentWeek && (
+        <p className="muted" style={{ fontSize: 13, marginTop: -8, marginBottom: 8 }}>
+          <Link href="/">Jump to this week</Link>
+        </p>
+      )}
 
       {/* Always the oldest unreviewed day, so clearing one reveals the
           next and a backlog works through itself a day at a time. */}

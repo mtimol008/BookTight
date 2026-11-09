@@ -225,26 +225,21 @@ export function NewJobForm({
     const coordinates = suggestion.coordinates;
     setSelectedDayTimeSuggestion(null);
     startCheckingTimeSuggestion(async () => {
-      try {
-        const result = await getDayTimeSuggestion(
-          coordinates,
-          {
-            type: timeSlotType,
-            specificTime: timeSlotType === "specific" ? specificTime : undefined,
-            urgency,
-          },
-          date,
-          undefined,
-          durationMinutes
-        );
-        if (timeSuggestionRequestRef.current === date) {
-          setSelectedDayTimeSuggestion(result);
-          setAcceptTimeSuggestion(result?.fits ?? false);
-        }
-      } catch {
-        if (timeSuggestionRequestRef.current === date) {
-          setSelectedDayTimeSuggestion(null);
-        }
+      const result = await getDayTimeSuggestion(
+        coordinates,
+        {
+          type: timeSlotType,
+          specificTime: timeSlotType === "specific" ? specificTime : undefined,
+          urgency,
+        },
+        date,
+        undefined,
+        durationMinutes
+      );
+      if (timeSuggestionRequestRef.current === date) {
+        const data = result.ok ? result.data : null;
+        setSelectedDayTimeSuggestion(data);
+        setAcceptTimeSuggestion(data?.fits ?? false);
       }
     });
   }
@@ -319,25 +314,25 @@ export function NewJobForm({
     }
 
     startSuggesting(async () => {
-      try {
-        const result = await getSchedulingSuggestion(
-          address,
-          {
-            type: timeSlotType,
-            specificTime: timeSlotType === "specific" ? specificTime : undefined,
-            urgency,
-          },
-          undefined,
-          durationMinutes
-        );
-        setSuggestion(result);
-        setSelectedDate(result.suggestion.day.date);
-        setAcceptTimeSuggestion(result.timeSuggestion?.fits ?? false);
-        setSelectedDayTimeSuggestion(result.timeSuggestion);
-        timeSuggestionRequestRef.current = result.suggestion.day.date;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong.");
+      const result = await getSchedulingSuggestion(
+        address,
+        {
+          type: timeSlotType,
+          specificTime: timeSlotType === "specific" ? specificTime : undefined,
+          urgency,
+        },
+        undefined,
+        durationMinutes
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
+      setSuggestion(result.data);
+      setSelectedDate(result.data.suggestion.day.date);
+      setAcceptTimeSuggestion(result.data.timeSuggestion?.fits ?? false);
+      setSelectedDayTimeSuggestion(result.data.timeSuggestion);
+      timeSuggestionRequestRef.current = result.data.suggestion.day.date;
     });
   }
 
@@ -367,28 +362,23 @@ export function NewJobForm({
     if (!value || !suggestion) return;
 
     startCheckingCustomDate(async () => {
-      try {
-        const info = await getDayRouteInfo(
-          suggestion.coordinates,
-          {
-            type: timeSlotType,
-            specificTime: timeSlotType === "specific" ? specificTime : undefined,
-            urgency,
-          },
-          value,
-          undefined,
-          durationMinutes
-        );
-        if (customDateRequestRef.current === value) {
-          setCustomDateInfo(info);
-        }
-      } catch (err) {
-        if (customDateRequestRef.current === value) {
-          setCustomDateError(
-            err instanceof Error ? err.message : "Could not check that date."
-          );
-        }
+      const result = await getDayRouteInfo(
+        suggestion.coordinates,
+        {
+          type: timeSlotType,
+          specificTime: timeSlotType === "specific" ? specificTime : undefined,
+          urgency,
+        },
+        value,
+        undefined,
+        durationMinutes
+      );
+      if (customDateRequestRef.current !== value) return;
+      if (!result.ok) {
+        setCustomDateError(result.error);
+        return;
       }
+      setCustomDateInfo(result.data);
     });
   }
 
@@ -416,38 +406,39 @@ export function NewJobForm({
     const finalTime = getFinalTimeSelection();
 
     startSaving(async () => {
-      try {
-        const aha = await confirmAndSaveJob({
-          address: suggestion.formattedAddress,
-          date: selectedDate,
-          timeSlotType: finalTime.type,
-          specificTime: finalTime.specificTime,
-          customerName,
-          description,
-          durationMinutes,
-          urgency,
-        });
+      const result = await confirmAndSaveJob({
+        address: suggestion.formattedAddress,
+        date: selectedDate,
+        timeSlotType: finalTime.type,
+        specificTime: finalTime.specificTime,
+        customerName,
+        description,
+        durationMinutes,
+        urgency,
+      });
 
-        // Whatever happens next (the confirmation card, or leaving for
-        // This Week) is decided now but deferred to the modal's dismiss
-        // handler when there's a celebration to show first — it takes
-        // priority over both, sitting on top as an overlay either way.
-        if (isEarlySession) {
-          // Offer a fast path to keep going instead of bouncing back to
-          // This Week — reused as the SAME form, not a parallel bulk-add
-          // UI, so "Add another job" below just resets this one.
-          setSavedConfirmation({ customerName, date: selectedDate });
-        }
-        if (aha) {
-          setAhaMoment(aha);
-        } else if (!isEarlySession) {
-          // Add is its own screen, so an established user's saved job
-          // returns to the week rather than clearing the form in place.
-          router.push("/");
-          router.refresh();
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save job.");
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      // Whatever happens next (the confirmation card, or leaving for
+      // This Week) is decided now but deferred to the modal's dismiss
+      // handler when there's a celebration to show first — it takes
+      // priority over both, sitting on top as an overlay either way.
+      if (isEarlySession) {
+        // Offer a fast path to keep going instead of bouncing back to
+        // This Week — reused as the SAME form, not a parallel bulk-add
+        // UI, so "Add another job" below just resets this one.
+        setSavedConfirmation({ customerName, date: selectedDate });
+      }
+      if (result.data) {
+        setAhaMoment(result.data);
+      } else if (!isEarlySession) {
+        // Add is its own screen, so an established user's saved job
+        // returns to the week rather than clearing the form in place.
+        router.push("/");
+        router.refresh();
       }
     });
   }

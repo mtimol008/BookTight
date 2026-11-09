@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { BackIcon } from "@/components/icons";
 import { SecurityEditForm } from "@/components/SecurityEditForm";
 import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = {
+  title: "Security",
+};
 
 export default async function EditSecurityPage() {
   const supabase = await createClient();

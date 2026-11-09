@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/profiles";
 import { chooseAddJobNow, chooseShowMeAround } from "./actions";
+
+export const metadata: Metadata = {
+  title: "Welcome",
+};
 
 export default async function WelcomePage() {
   const profile = await getCurrentProfile();

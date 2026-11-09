@@ -161,6 +161,38 @@ export function shiftMonth(date: Date, delta: number): Date {
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
 
+/** "2026-08-17" -> that date, in local time — any date within the target
+ *  week, since getCurrentWeekRange/getMonday snap it to that week's
+ *  Monday regardless of which weekday was passed. Falls back to today for
+ *  a missing or malformed query param, same convention as parseMonthParam. */
+export function parseWeekParam(weekParam: string | undefined): Date {
+  if (weekParam) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(weekParam);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      const candidate = new Date(year, month - 1, day);
+      if (!Number.isNaN(candidate.getTime())) {
+        return candidate;
+      }
+    }
+  }
+  return new Date();
+}
+
+/** A date -> "2026-08-17", the ?week= query param form. */
+export function formatWeekParam(date: Date): string {
+  return toISODate(date);
+}
+
+/** A date shifted by whole weeks (negative goes back). */
+export function shiftWeek(date: Date, deltaWeeks: number): Date {
+  const shifted = new Date(date);
+  shifted.setDate(date.getDate() + deltaWeeks * 7);
+  return shifted;
+}
+
 /** Week range starting from a given Monday, spanning N weeks. */
 export function getWeekRange(startMonday: string, weeks: number): WeekRange {
   const start = new Date(startMonday + "T00:00:00");

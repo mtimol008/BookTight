@@ -123,14 +123,14 @@ export function DayReview({
     const notDone = jobs.filter((job) => !checkedIds.has(job.id));
 
     startConfirming(async () => {
-      try {
-        await markJobsCompleted(completed.map((job) => job.id));
-        setPending(notDone);
-        setPhase("resolve");
-        finishIfDone(notDone);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save the review.");
+      const result = await markJobsCompleted(completed.map((job) => job.id));
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
+      setPending(notDone);
+      setPhase("resolve");
+      finishIfDone(notDone);
     });
   }
 
@@ -158,12 +158,12 @@ export function DayReview({
   function handleDiscard(job: JobRecord) {
     setError(null);
     startResolving(async () => {
-      try {
-        await markJobCancelled(job.id);
-        removePending(job.id);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to discard the job.");
+      const result = await markJobCancelled(job.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
+      removePending(job.id);
     });
   }
 
@@ -194,19 +194,19 @@ export function DayReview({
     // already shows a separate "Working out the best day..." note
     // alongside it, so there's still a visible loading cue.
     startLoadingSuggestion(async () => {
-      try {
-        const result = await getSchedulingSuggestion(
-          job.address,
-          { type, specificTime: type === "specific" ? time : undefined },
-          // Exclude the job being moved, so the engine doesn't route
-          // around the very thing it's relocating.
-          job.id,
-          durationMinutes
-        );
-        setSuggestion(result);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not work out a new day.");
+      const result = await getSchedulingSuggestion(
+        job.address,
+        { type, specificTime: type === "specific" ? time : undefined },
+        // Exclude the job being moved, so the engine doesn't route
+        // around the very thing it's relocating.
+        job.id,
+        durationMinutes
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
+      setSuggestion(result.data);
     });
   }
 
@@ -254,24 +254,24 @@ export function DayReview({
   function handleRescheduleConfirm(job: JobRecord, newDate: string, time: TimeSelection) {
     setError(null);
     startResolving(async () => {
-      try {
-        // Updates the existing row rather than creating a second job.
-        const aha = await updateExistingJob({
-          id: job.id,
-          address: job.address,
-          date: newDate,
-          timeSlotType: time.type,
-          specificTime: time.specificTime,
-          customerName: job.customer_name,
-          description: job.description ?? "",
-          durationMinutes: parseDurationInput(time.type, durationMinutesInput),
-        });
-        removePending(job.id, !!aha);
-        if (aha) {
-          setAhaMoment(aha);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to reschedule the job.");
+      // Updates the existing row rather than creating a second job.
+      const result = await updateExistingJob({
+        id: job.id,
+        address: job.address,
+        date: newDate,
+        timeSlotType: time.type,
+        specificTime: time.specificTime,
+        customerName: job.customer_name,
+        description: job.description ?? "",
+        durationMinutes: parseDurationInput(time.type, durationMinutesInput),
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      removePending(job.id, !!result.data);
+      if (result.data) {
+        setAhaMoment(result.data);
       }
     });
   }
