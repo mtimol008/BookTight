@@ -328,26 +328,26 @@ export function JobsTable({
     setError(null);
 
     startSaving(async () => {
-      try {
-        const aha = await updateExistingJob({
-          id: job.id,
-          address: editValues.address,
-          date,
-          timeSlotType: time.type,
-          specificTime: time.specificTime,
-          customerName: editValues.customerName,
-          description: editValues.description,
-          durationMinutes: resolvedDurationMinutes(time.type, editValues.durationMinutesInput),
-        });
-        setEditingId(null);
-        setEditValues(null);
-        setDaySuggestion(null);
-        setCurrentDateOnDemandInfo(null);
-        if (aha) {
-          setAhaMoment(aha);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save changes.");
+      const result = await updateExistingJob({
+        id: job.id,
+        address: editValues.address,
+        date,
+        timeSlotType: time.type,
+        specificTime: time.specificTime,
+        customerName: editValues.customerName,
+        description: editValues.description,
+        durationMinutes: resolvedDurationMinutes(time.type, editValues.durationMinutesInput),
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setEditingId(null);
+      setEditValues(null);
+      setDaySuggestion(null);
+      setCurrentDateOnDemandInfo(null);
+      if (result.data) {
+        setAhaMoment(result.data);
       }
     });
   }
@@ -384,48 +384,45 @@ export function JobsTable({
     setError(null);
     setAddressConfirmed(false);
     startCheckingDay(async () => {
-      try {
-        const result = await getSchedulingSuggestion(
-          editValues.address,
+      const suggestionResult = await getSchedulingSuggestion(
+        editValues.address,
+        {
+          type: editValues.timeSlotType,
+          specificTime:
+            editValues.timeSlotType === "specific" ? editValues.specificTime : undefined,
+        },
+        job.id,
+        durationMinutes
+      );
+      if (!suggestionResult.ok) {
+        setError(suggestionResult.error);
+        return;
+      }
+      const result = suggestionResult.data;
+      setDaySuggestion(result);
+
+      // The job's own current date might not be among the ranked
+      // candidates. Fetch its real info on demand so "keep the current
+      // date" never shows blank or broken detail. This is job.date (the
+      // committed value), not editValues.date — the date field may
+      // already hold a not-yet-saved pick by the time this runs.
+      if (result.allDays.some((d) => d.date === job.date)) {
+        setCurrentDateOnDemandInfo(null);
+      } else {
+        const infoResult = await getDayRouteInfo(
+          result.coordinates,
           {
             type: editValues.timeSlotType,
             specificTime:
-              editValues.timeSlotType === "specific" ? editValues.specificTime : undefined,
+              editValues.timeSlotType === "specific"
+                ? editValues.specificTime
+                : undefined,
           },
+          job.date,
           job.id,
           durationMinutes
         );
-        setDaySuggestion(result);
-
-        // The job's own current date might not be among the ranked
-        // candidates. Fetch its real info on demand so "keep the current
-        // date" never shows blank or broken detail. This is job.date (the
-        // committed value), not editValues.date — the date field may
-        // already hold a not-yet-saved pick by the time this runs.
-        if (result.allDays.some((d) => d.date === job.date)) {
-          setCurrentDateOnDemandInfo(null);
-        } else {
-          try {
-            const info = await getDayRouteInfo(
-              result.coordinates,
-              {
-                type: editValues.timeSlotType,
-                specificTime:
-                  editValues.timeSlotType === "specific"
-                    ? editValues.specificTime
-                    : undefined,
-              },
-              job.date,
-              job.id,
-              durationMinutes
-            );
-            setCurrentDateOnDemandInfo(info);
-          } catch {
-            setCurrentDateOnDemandInfo(null);
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong.");
+        setCurrentDateOnDemandInfo(infoResult.ok ? infoResult.data : null);
       }
     });
   }
@@ -472,31 +469,28 @@ export function JobsTable({
     setAddressConfirmed(false);
 
     startCheckingDay(async () => {
-      try {
-        const result = await getSchedulingSuggestion(
-          job.address,
+      const suggestionResult = await getSchedulingSuggestion(
+        job.address,
+        { type: targetSection, specificTime: undefined },
+        job.id,
+        job.duration_minutes
+      );
+      if (!suggestionResult.ok) {
+        setError(suggestionResult.error);
+        return;
+      }
+      const result = suggestionResult.data;
+      setDaySuggestion(result);
+
+      if (!result.allDays.some((d) => d.date === job.date)) {
+        const infoResult = await getDayRouteInfo(
+          result.coordinates,
           { type: targetSection, specificTime: undefined },
+          job.date,
           job.id,
           job.duration_minutes
         );
-        setDaySuggestion(result);
-
-        if (!result.allDays.some((d) => d.date === job.date)) {
-          try {
-            const info = await getDayRouteInfo(
-              result.coordinates,
-              { type: targetSection, specificTime: undefined },
-              job.date,
-              job.id,
-              job.duration_minutes
-            );
-            setCurrentDateOnDemandInfo(info);
-          } catch {
-            setCurrentDateOnDemandInfo(null);
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong.");
+        setCurrentDateOnDemandInfo(infoResult.ok ? infoResult.data : null);
       }
     });
   }
@@ -512,19 +506,21 @@ export function JobsTable({
   function handleWithinSectionReorder(date: string, proposedOrder: string[]) {
     setReorderError(null);
     startCheckingReorder(async () => {
-      try {
-        const impact = await getManualOrderImpact(date, proposedOrder);
-        if (impact.meaningful) {
-          setReorderWarning({ date, proposedOrder, impact });
-          return;
-        }
-        await saveManualOrder(proposedOrder);
-        router.refresh();
-      } catch (err) {
-        setReorderError(
-          err instanceof Error ? err.message : "Could not check that reorder."
-        );
+      const impactResult = await getManualOrderImpact(date, proposedOrder);
+      if (!impactResult.ok) {
+        setReorderError(impactResult.error);
+        return;
       }
+      if (impactResult.data.meaningful) {
+        setReorderWarning({ date, proposedOrder, impact: impactResult.data });
+        return;
+      }
+      const saveResult = await saveManualOrder(proposedOrder);
+      if (!saveResult.ok) {
+        setReorderError(saveResult.error);
+        return;
+      }
+      router.refresh();
     });
   }
 
@@ -533,12 +529,12 @@ export function JobsTable({
     const { proposedOrder } = reorderWarning;
     setReorderWarning(null);
     startSavingReorder(async () => {
-      try {
-        await saveManualOrder(proposedOrder);
-        router.refresh();
-      } catch (err) {
-        setReorderError(err instanceof Error ? err.message : "Failed to save the new order.");
+      const result = await saveManualOrder(proposedOrder);
+      if (!result.ok) {
+        setReorderError(result.error);
+        return;
       }
+      router.refresh();
     });
   }
 

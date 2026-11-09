@@ -194,17 +194,11 @@ export function DaySuggestionPanel({
       targetDate,
       jobId,
       durationMinutes
-    )
-      .then((result) => {
-        if (!cancelled && timeSuggestionRequestRef.current === targetDate) {
-          setSelectedDayTimeSuggestion(result);
-        }
-      })
-      .catch(() => {
-        if (!cancelled && timeSuggestionRequestRef.current === targetDate) {
-          setSelectedDayTimeSuggestion(null);
-        }
-      });
+    ).then((result) => {
+      if (!cancelled && timeSuggestionRequestRef.current === targetDate) {
+        setSelectedDayTimeSuggestion(result.ok ? result.data : null);
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -238,23 +232,17 @@ export function DaySuggestionPanel({
 
     setSelectedDayTimeSuggestion(null);
     startCheckingTimeSuggestion(async () => {
-      try {
-        const result = await getDayTimeSuggestion(
-          suggestion.coordinates,
-          panelRequestedTime,
-          date,
-          jobId,
-          durationMinutes
-        );
-        // Ignore this response if the selected day has moved on since we
-        // asked — a slow request shouldn't clobber a newer selection.
-        if (timeSuggestionRequestRef.current === date) {
-          setSelectedDayTimeSuggestion(result);
-        }
-      } catch {
-        if (timeSuggestionRequestRef.current === date) {
-          setSelectedDayTimeSuggestion(null);
-        }
+      const result = await getDayTimeSuggestion(
+        suggestion.coordinates,
+        panelRequestedTime,
+        date,
+        jobId,
+        durationMinutes
+      );
+      // Ignore this response if the selected day has moved on since we
+      // asked — a slow request shouldn't clobber a newer selection.
+      if (timeSuggestionRequestRef.current === date) {
+        setSelectedDayTimeSuggestion(result.ok ? result.data : null);
       }
     });
   }
@@ -322,28 +310,23 @@ export function DaySuggestionPanel({
     if (!value) return;
 
     startCheckingCustomDate(async () => {
-      try {
-        const info = await getDayRouteInfo(
-          suggestion.coordinates,
-          {
-            type: requestedTime.type,
-            specificTime:
-              requestedTime.type === "specific" ? requestedTime.specificTime : undefined,
-          },
-          value,
-          jobId,
-          durationMinutes
-        );
-        if (customDateRequestRef.current === value) {
-          setCustomDateInfo(info);
-        }
-      } catch (err) {
-        if (customDateRequestRef.current === value) {
-          setCustomDateError(
-            err instanceof Error ? err.message : "Could not check that date."
-          );
-        }
+      const result = await getDayRouteInfo(
+        suggestion.coordinates,
+        {
+          type: requestedTime.type,
+          specificTime:
+            requestedTime.type === "specific" ? requestedTime.specificTime : undefined,
+        },
+        value,
+        jobId,
+        durationMinutes
+      );
+      if (customDateRequestRef.current !== value) return;
+      if (!result.ok) {
+        setCustomDateError(result.error);
+        return;
       }
+      setCustomDateInfo(result.data);
     });
   }
 

@@ -57,6 +57,23 @@ import { checkIpRateLimit, getClientIp } from "@/lib/rateLimit";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
+/**
+ * Every action below that can fail for a reason the user needs to read
+ * returns one of these instead of throwing — a thrown Server Action error
+ * has its message redacted to a digest in a real production build (Next
+ * only keeps the message in dev), so anything meant to be shown to the user
+ * has to travel back as data, not as an exception.
+ */
+export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+function ok<T>(data: T): ActionResult<T> {
+  return { ok: true, data };
+}
+
+function fail<T>(error: string): ActionResult<T> {
+  return { ok: false, error };
+}
+
 export interface RequestedTime {
   type: TimeSlotType;
   specificTime?: string;
@@ -390,10 +407,10 @@ export async function getSchedulingSuggestion(
   requestedTime: RequestedTime,
   excludeJobId?: string,
   durationMinutes: number | null = null
-): Promise<SuggestionResult> {
+): Promise<ActionResult<SuggestionResult>> {
   const profile = await getCurrentProfile();
   if (!profile) {
-    throw new Error(
+    return fail(
       "You must be logged in with a home address set to get a day suggestion."
     );
   }
@@ -403,7 +420,7 @@ export async function getSchedulingSuggestion(
     proximity: [profile.home_longitude, profile.home_latitude],
   });
   if (!geocoded) {
-    throw new Error(
+    return fail(
       `Could not find coordinates for "${address}". Try a more specific address.`
     );
   }
@@ -462,7 +479,7 @@ export async function getSchedulingSuggestion(
   );
 
   if (!result) {
-    throw new Error("Could not compute a day suggestion.");
+    return fail("Could not compute a day suggestion.");
   }
 
   let clusterJobLabel: string | undefined;
@@ -489,7 +506,7 @@ export async function getSchedulingSuggestion(
     maxTravelRangeKm: preferences.maxTravelRangeKm,
   });
 
-  return {
+  return ok({
     coordinates: { latitude: geocoded.latitude, longitude: geocoded.longitude },
     formattedAddress: geocoded.formattedAddress,
     suggestion: { ...result.suggestion, clusterJobLabel },
@@ -499,7 +516,7 @@ export async function getSchedulingSuggestion(
     maxJobsPerDay: preferences.maxJobsPerDay,
     distanceUnit: profile.distance_unit,
     lowConfidenceAddress,
-  };
+  });
 }
 
 /**
@@ -516,10 +533,10 @@ export async function getDayRouteInfo(
   date: string,
   excludeJobId?: string,
   durationMinutes: number | null = null
-): Promise<DayRoute> {
+): Promise<ActionResult<DayRoute>> {
   const profile = await getCurrentProfile();
   if (!profile) {
-    throw new Error(
+    return fail(
       "You must be logged in with a home address set to get a day suggestion."
     );
   }
@@ -556,10 +573,10 @@ export async function getDayRouteInfo(
   );
 
   if (!result) {
-    throw new Error("Could not compute route info for that date.");
+    return fail("Could not compute route info for that date.");
   }
 
-  return result.allDays[0];
+  return ok(result.allDays[0]);
 }
 
 /**
@@ -577,10 +594,10 @@ export async function getDayTimeSuggestion(
   date: string,
   excludeJobId?: string,
   durationMinutes: number | null = null
-): Promise<TimeSuggestion | null> {
+): Promise<ActionResult<TimeSuggestion | null>> {
   const profile = await getCurrentProfile();
   if (!profile) {
-    throw new Error(
+    return fail(
       "You must be logged in with a home address set to get a day suggestion."
     );
   }
@@ -612,10 +629,10 @@ export async function getDayTimeSuggestion(
   );
 
   if (!result) {
-    throw new Error("Could not compute a time suggestion for that date.");
+    return fail("Could not compute a time suggestion for that date.");
   }
 
-  return buildTimeVerdict(requestedTime, result.allDays[0], dayJobs, profile.distance_unit);
+  return ok(buildTimeVerdict(requestedTime, result.allDays[0], dayJobs, profile.distance_unit));
 }
 
 // Named constants, all in one place, so these are easy to retune from real
@@ -786,32 +803,37 @@ const DESCRIPTION_MAX_LENGTH = 2000;
  * a direct server-action call bypasses those entirely, and these are
  * otherwise-unbounded text columns. Shared by confirmAndSaveJob and
  * updateExistingJob, the two places a job's text fields get written.
+ * Returns the first problem found, or null when everything's fine.
  */
-function validateJobFields(input: { address: string; customerName: string; description: string }): void {
+function validateJobFields(input: { address: string; customerName: string; description: string }): string | null {
   if (!input.address.trim()) {
-    throw new Error("Address is required.");
+    return "Address is required.";
   }
   if (input.address.length > ADDRESS_MAX_LENGTH) {
-    throw new Error(`Address must be ${ADDRESS_MAX_LENGTH} characters or fewer.`);
+    return `Address must be ${ADDRESS_MAX_LENGTH} characters or fewer.`;
   }
   if (!input.customerName.trim()) {
-    throw new Error("Customer name is required.");
+    return "Customer name is required.";
   }
   if (input.customerName.length > CUSTOMER_NAME_MAX_LENGTH) {
-    throw new Error(`Customer name must be ${CUSTOMER_NAME_MAX_LENGTH} characters or fewer.`);
+    return `Customer name must be ${CUSTOMER_NAME_MAX_LENGTH} characters or fewer.`;
   }
   if (input.description.length > DESCRIPTION_MAX_LENGTH) {
-    throw new Error(`Description must be ${DESCRIPTION_MAX_LENGTH} characters or fewer.`);
+    return `Description must be ${DESCRIPTION_MAX_LENGTH} characters or fewer.`;
   }
+  return null;
 }
 
 export async function confirmAndSaveJob(
   input: ConfirmJobInput
-): Promise<AhaMomentPayload | null> {
-  validateJobFields(input);
+): Promise<ActionResult<AhaMomentPayload | null>> {
+  const validationError = validateJobFields(input);
+  if (validationError) {
+    return fail(validationError);
+  }
 
   if (!hasActiveEntitlement(await getCurrentSubscription())) {
-    throw new Error(READ_ONLY_MESSAGE);
+    return fail(READ_ONLY_MESSAGE);
   }
 
   // The user's own today, not the server's — see nowForScheduling. Falls
@@ -820,7 +842,7 @@ export async function confirmAndSaveJob(
   const profile = await getCurrentProfile();
   const today = profile ? getTodayDateStringInTimezone(profile.timezone) : getTodayDateString();
   if (input.date < today) {
-    throw new Error("Can't book a job on a date that's already passed.");
+    return fail("Can't book a job on a date that's already passed.");
   }
 
   // Re-geocode server-side rather than trusting client-supplied
@@ -833,7 +855,7 @@ export async function confirmAndSaveJob(
     proximity: profile ? [profile.home_longitude, profile.home_latitude] : undefined,
   });
   if (!geocoded) {
-    throw new Error(
+    return fail(
       `Could not find coordinates for "${input.address}". Try a more specific address.`
     );
   }
@@ -865,7 +887,7 @@ export async function confirmAndSaveJob(
   }
 
   revalidatePath("/");
-  return checkAhaMoment(input.date);
+  return ok(await checkAhaMoment(input.date));
 }
 
 export interface UpdateJobFormInput {
@@ -884,11 +906,14 @@ export interface UpdateJobFormInput {
 
 export async function updateExistingJob(
   input: UpdateJobFormInput
-): Promise<AhaMomentPayload | null> {
-  validateJobFields(input);
+): Promise<ActionResult<AhaMomentPayload | null>> {
+  const validationError = validateJobFields(input);
+  if (validationError) {
+    return fail(validationError);
+  }
 
   if (!hasActiveEntitlement(await getCurrentSubscription())) {
-    throw new Error(READ_ONLY_MESSAGE);
+    return fail(READ_ONLY_MESSAGE);
   }
 
   // Only reject a date that's actually changing to a past one — a job
@@ -906,7 +931,7 @@ export async function updateExistingJob(
     proximity: profile ? [profile.home_longitude, profile.home_latitude] : undefined,
   });
   if (!geocoded) {
-    throw new Error(
+    return fail(
       `Could not find coordinates for "${input.address}". Try a more specific address.`
     );
   }
@@ -918,7 +943,7 @@ export async function updateExistingJob(
   // whatever the client last had, since it may be stale.
   const current = await getJobById(input.id);
   if (input.date !== current?.date && input.date < today) {
-    throw new Error("Can't move a job to a date that's already passed.");
+    return fail("Can't move a job to a date that's already passed.");
   }
 
   const movedGroups =
@@ -940,7 +965,7 @@ export async function updateExistingJob(
   });
 
   revalidatePath("/");
-  return checkAhaMoment(input.date);
+  return ok(await checkAhaMoment(input.date));
 }
 
 /**
@@ -951,10 +976,10 @@ export async function updateExistingJob(
 export async function getManualOrderImpact(
   date: string,
   proposedOrder: string[]
-): Promise<ManualOrderComparison> {
+): Promise<ActionResult<ManualOrderComparison>> {
   const profile = await getCurrentProfile();
   if (!profile) {
-    throw new Error("You must be logged in with a home address set to check a reorder.");
+    return fail("You must be logged in with a home address set to check a reorder.");
   }
 
   const dayJobs = await getJobsForWeek(date, date);
@@ -968,20 +993,23 @@ export async function getManualOrderImpact(
     manualPosition: job.manual_position,
   }));
 
-  return compareManualOrder(
-    { latitude: profile.home_latitude, longitude: profile.home_longitude },
-    existingJobs,
-    proposedOrder
+  return ok(
+    compareManualOrder(
+      { latitude: profile.home_latitude, longitude: profile.home_longitude },
+      existingJobs,
+      proposedOrder
+    )
   );
 }
 
 /** Persists a within-section drag-reorder once confirmed. */
-export async function saveManualOrder(proposedOrder: string[]): Promise<void> {
+export async function saveManualOrder(proposedOrder: string[]): Promise<ActionResult<void>> {
   if (!hasActiveEntitlement(await getCurrentSubscription())) {
-    throw new Error(READ_ONLY_MESSAGE);
+    return fail(READ_ONLY_MESSAGE);
   }
   await setManualPositions(proposedOrder.map((id, index) => ({ id, position: index })));
   revalidatePath("/");
+  return ok(undefined);
 }
 
 // Deliberately NOT entitlement-gated — a lapsed account must still be able
@@ -992,13 +1020,14 @@ export async function deleteExistingJob(id: string): Promise<void> {
 }
 
 /** End-of-day review: the jobs that got done. */
-export async function markJobsCompleted(ids: string[]): Promise<void> {
+export async function markJobsCompleted(ids: string[]): Promise<ActionResult<void>> {
   if (!hasActiveEntitlement(await getCurrentSubscription())) {
-    throw new Error(READ_ONLY_MESSAGE);
+    return fail(READ_ONLY_MESSAGE);
   }
   await setJobStatuses(ids, "completed");
   revalidatePath("/");
   revalidatePath("/review", "layout");
+  return ok(undefined);
 }
 
 /**
@@ -1006,13 +1035,14 @@ export async function markJobsCompleted(ids: string[]): Promise<void> {
  * than deleted — it just stops appearing in the active view — so this
  * stays recoverable if an undo is ever wanted.
  */
-export async function markJobCancelled(id: string): Promise<void> {
+export async function markJobCancelled(id: string): Promise<ActionResult<void>> {
   if (!hasActiveEntitlement(await getCurrentSubscription())) {
-    throw new Error(READ_ONLY_MESSAGE);
+    return fail(READ_ONLY_MESSAGE);
   }
   await setJobStatuses([id], "cancelled");
   revalidatePath("/");
   revalidatePath("/review", "layout");
+  return ok(undefined);
 }
 
 // ------------------------------------------------------- first-time engagement
