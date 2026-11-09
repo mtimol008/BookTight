@@ -304,23 +304,23 @@ async function phase4_passwordLength() {
         document.getElementById(id)?.removeAttribute("required");
       }
     });
-    await page.fill("#signup-password", "short123");
-    await page.fill("#signup-confirm-password", "short123");
+    await page.fill("#signup-password", "short12");
+    await page.fill("#signup-confirm-password", "short12");
     await page.click('input[name="termsAccepted"]');
     await page.click('button[type="submit"]');
     await page.waitForTimeout(1500);
 
     const errorText = await page.locator(".error-text").first().textContent().catch(() => null);
     check(
-      "9-character password is rejected with the expected message",
-      !!errorText && errorText.includes("at least 10 characters"),
+      "7-character password is rejected with the expected message",
+      !!errorText && errorText.includes("at least 8 characters"),
       errorText ?? "(no error shown)"
     );
 
-    await page.fill("#signup-password", "longenough10");
-    await page.fill("#signup-confirm-password", "longenough10");
+    await page.fill("#signup-password", "longenough8");
+    await page.fill("#signup-confirm-password", "longenough8");
     const stillBlocked = await page.locator("#signup-password").getAttribute("minlength");
-    check("10+ character password is not blocked by the same message", stillBlocked === null || Number(stillBlocked) <= 12);
+    check("8+ character password is not blocked by the same message", stillBlocked === null || Number(stillBlocked) <= 10);
   } finally {
     await browser.close();
   }
