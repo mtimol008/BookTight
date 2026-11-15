@@ -391,6 +391,32 @@ function buildTimeVerdict(
   return null;
 }
 
+/**
+ * geocodeAddress throws on a Mapbox failure/rate-limit/missing-token
+ * (see geocoding.ts) — a throw from here escapes every one of this file's
+ * three call sites uncaught, crashing to the error boundary and, in a real
+ * production build, redacting the message to a digest the user can't act
+ * on (confirmed live: a poisoned Mapbox token showed a bare error page and
+ * discarded the whole in-progress form). Wrapping it here turns that into
+ * the same ActionResult shape every other user-facing failure in this file
+ * already uses, so the caller gets a clean inline message and keeps its
+ * form data instead.
+ */
+async function safeGeocodeAddress(
+  address: string,
+  options: Parameters<typeof geocodeAddress>[1]
+): Promise<ActionResult<Awaited<ReturnType<typeof geocodeAddress>>>> {
+  try {
+    return ok(await geocodeAddress(address, options));
+  } catch (error) {
+    return fail(
+      error instanceof Error
+        ? error.message
+        : "Couldn't verify that address right now. Please try again in a moment."
+    );
+  }
+}
+
 /** The user's own wall-clock position right now, resolved via their stored
  *  profile timezone rather than the server's runtime clock (Vercel's Node
  *  processes run in UTC) — the difference that matters during BST, where
@@ -415,10 +441,14 @@ export async function getSchedulingSuggestion(
     );
   }
 
-  const geocoded = await geocodeAddress(address, {
+  const geocodeResult = await safeGeocodeAddress(address, {
     userId: profile.id,
     proximity: [profile.home_longitude, profile.home_latitude],
   });
+  if (!geocodeResult.ok) {
+    return fail(geocodeResult.error);
+  }
+  const geocoded = geocodeResult.data;
   if (!geocoded) {
     return fail(
       `Could not find coordinates for "${address}". Try a more specific address.`
@@ -850,10 +880,14 @@ export async function confirmAndSaveJob(
   // which already does this. The cache (see geocoding.ts) makes this
   // cheap for the common case: the same address the suggestion step just
   // geocoded moments earlier.
-  const geocoded = await geocodeAddress(input.address, {
+  const geocodeResult = await safeGeocodeAddress(input.address, {
     userId: profile?.id,
     proximity: profile ? [profile.home_longitude, profile.home_latitude] : undefined,
   });
+  if (!geocodeResult.ok) {
+    return fail(geocodeResult.error);
+  }
+  const geocoded = geocodeResult.data;
   if (!geocoded) {
     return fail(
       `Could not find coordinates for "${input.address}". Try a more specific address.`
@@ -926,10 +960,14 @@ export async function updateExistingJob(
 
   // Re-geocode on every edit (not just when the address looks different) so
   // stored coordinates never drift out of sync with the address text.
-  const geocoded = await geocodeAddress(input.address, {
+  const geocodeResult = await safeGeocodeAddress(input.address, {
     userId: profile?.id,
     proximity: profile ? [profile.home_longitude, profile.home_latitude] : undefined,
   });
+  if (!geocodeResult.ok) {
+    return fail(geocodeResult.error);
+  }
+  const geocoded = geocodeResult.data;
   if (!geocoded) {
     return fail(
       `Could not find coordinates for "${input.address}". Try a more specific address.`
