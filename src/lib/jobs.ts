@@ -350,21 +350,43 @@ export interface UpdateJobInput extends NewJobInput {
   manual_position?: number | null;
 }
 
+/** Thrown when the job either never existed, isn't the caller's own, or
+ *  was deleted/moved out from under a concurrent edit (e.g. the same job
+ *  open in two tabs) — a genuine race, not a bug, so callers should show
+ *  a clean "that job no longer exists" message rather than a crash. */
+export class JobNotFoundError extends Error {}
+
 export async function updateJob(
   id: string,
   updates: UpdateJobInput
 ): Promise<JobRecord> {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new JobNotFoundError("You must be logged in to update a job.");
+  }
+
+  // Explicit user_id filter as a backstop alongside RLS, same reasoning
+  // as getJobById/getAllJobsForCurrentUser — and .maybeSingle() instead of
+  // .single() so a row that's gone (deleted in another tab moments
+  // earlier) returns a clean, catchable result instead of .single()'s
+  // uncaught throw on zero rows.
   const { data, error } = await supabase
     .from("jobs")
     .update(updates)
     .eq("id", id)
+    .eq("user_id", user.id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw new Error(`Failed to update job: ${error.message}`);
+  }
+  if (!data) {
+    throw new JobNotFoundError("That job no longer exists.");
   }
 
   return data;

@@ -7,6 +7,7 @@ import {
   getJobsForWeek,
   getTotalJobCount,
   insertJob,
+  JobNotFoundError,
   setJobStatuses,
   setManualPositions,
   updateJob,
@@ -988,19 +989,26 @@ export async function updateExistingJob(
     !!current &&
     (current.date !== input.date || current.time_slot_type !== input.timeSlotType);
 
-  await updateJob(input.id, {
-    address: geocoded.formattedAddress,
-    latitude: geocoded.latitude,
-    longitude: geocoded.longitude,
-    date: input.date,
-    time_slot_type: input.timeSlotType,
-    specific_time: input.specificTime,
-    customer_name: input.customerName,
-    description: input.description,
-    duration_minutes: input.durationMinutes,
-    urgency: input.urgency ?? current?.urgency ?? "normal",
-    ...(movedGroups ? { manual_position: null } : {}),
-  });
+  try {
+    await updateJob(input.id, {
+      address: geocoded.formattedAddress,
+      latitude: geocoded.latitude,
+      longitude: geocoded.longitude,
+      date: input.date,
+      time_slot_type: input.timeSlotType,
+      specific_time: input.specificTime,
+      customer_name: input.customerName,
+      description: input.description,
+      duration_minutes: input.durationMinutes,
+      urgency: input.urgency ?? current?.urgency ?? "normal",
+      ...(movedGroups ? { manual_position: null } : {}),
+    });
+  } catch (error) {
+    if (error instanceof JobNotFoundError) {
+      return fail(error.message);
+    }
+    throw error;
+  }
 
   revalidatePath("/");
   return ok(await checkAhaMoment(input.date));
