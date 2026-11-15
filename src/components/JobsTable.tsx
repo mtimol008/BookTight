@@ -763,6 +763,9 @@ export function JobsTable({
                                 editValues.durationMinutesInput
                               )}
                               currentDate={job.date}
+                              initialCustomDate={
+                                editValues.date !== job.date ? editValues.date : null
+                              }
                               currentDateInfo={currentDateOnDemandInfo}
                               requestedTimeLabel={
                                 editValues.timeSlotType === "specific" &&
