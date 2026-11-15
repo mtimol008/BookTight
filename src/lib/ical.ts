@@ -10,6 +10,7 @@ import {
   type TimeSlotType,
   type Weekday,
 } from "./scheduling";
+import { zonedWallTimeToUtc } from "./week";
 
 export interface ICalEvent {
   uid: string;
@@ -35,10 +36,10 @@ function escapeICalText(text: string): string {
 /** All-day VALUE=DATE calendar dates and the UTC DTSTAMP timestamp need
  *  different readings of the same Date object: an all-day date is built
  *  from local midnight (see jobToICalEvent), so it has to be read back with
- *  local getters — the same convention formatICalDateTimeLocal already uses
- *  for timed events — or a positive UTC offset silently shifts it back a
+ *  local getters — or a positive UTC offset silently shifts it back a
  *  calendar day. DTSTAMP is a real UTC instant, so it correctly stays on
- *  UTC getters. */
+ *  UTC getters. Timed events are formatted separately, via
+ *  formatICalDateTimeLocal's Intl-based, timezone-aware reading. */
 function formatICalDate(date: Date, isAllDay: boolean): string {
   if (isAllDay) {
     const year = date.getFullYear();
@@ -57,15 +58,28 @@ function formatICalDate(date: Date, isAllDay: boolean): string {
   return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
 }
 
-function formatICalDateTimeLocal(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const seconds = String(date.getSeconds()).padStart(2, "0");
+/**
+ * `date` is a real UTC instant (see jobToICalEvent/zonedWallTimeToUtc) —
+ * this reads it back as the wall-clock time it represents IN `timezone`,
+ * via Intl, rather than process-local getters. Process-local getters would
+ * read Vercel's own UTC runtime clock, not the TZID this string is
+ * actually labelled with — the exact mismatch that let exported times
+ * drift an hour around a DST transition.
+ */
+function formatICalDateTimeLocal(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
 
-  return `${year}${month}${day}T${hours}${minutes}${seconds}`;
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return `${get("year")}${get("month")}${get("day")}T${get("hour")}${get("minute")}${get("second")}`;
 }
 
 function getVTIMEZONE(timezone: string): string {
@@ -110,8 +124,8 @@ export function generateICalFeed(
       lines.push(`DTSTART;VALUE=DATE:${formatICalDate(event.dtStart, true)}`);
       lines.push(`DTEND;VALUE=DATE:${formatICalDate(event.dtEnd, true)}`);
     } else {
-      lines.push(`DTSTART;TZID=${timezone}:${formatICalDateTimeLocal(event.dtStart)}`);
-      lines.push(`DTEND;TZID=${timezone}:${formatICalDateTimeLocal(event.dtEnd)}`);
+      lines.push(`DTSTART;TZID=${timezone}:${formatICalDateTimeLocal(event.dtStart, timezone)}`);
+      lines.push(`DTEND;TZID=${timezone}:${formatICalDateTimeLocal(event.dtEnd, timezone)}`);
     }
 
     lines.push(`SUMMARY:${escapeICalText(event.summary)}`);
@@ -179,23 +193,31 @@ export function deriveClockTimes(
 export function jobToICalEvent(
   job: JobRecord,
   baseUrl: string,
-  clockTime: PlannedClockTime | null
+  clockTime: PlannedClockTime | null,
+  timezone: string
 ): ICalEvent {
-  const jobDate = new Date(job.date + "T00:00:00");
   let dtStart: Date;
   let dtEnd: Date;
   let isAllDay = false;
 
   if (job.time_slot_type === "none" || job.time_slot_type === "all_day" || !clockTime) {
+    // All-day events are pure calendar dates, with no clock-time
+    // component to get wrong across a DST transition — plain local-date
+    // arithmetic (unaffected by the server's own runtime timezone) is
+    // correct here, same as every other day-level date in this codebase.
     isAllDay = true;
-    dtStart = new Date(jobDate);
-    dtEnd = new Date(jobDate);
+    dtStart = new Date(job.date + "T00:00:00");
+    dtEnd = new Date(dtStart);
     dtEnd.setDate(dtEnd.getDate() + 1);
   } else {
-    dtStart = new Date(jobDate);
-    dtStart.setMinutes(clockTime.startMinutes);
-    dtEnd = new Date(jobDate);
-    dtEnd.setMinutes(clockTime.endMinutes);
+    // Timed events DO have a real clock time that must survive a DST
+    // transition correctly — computed via the same Intl-based,
+    // timezone-aware arithmetic week.ts already uses for "today"/"now",
+    // rather than raw local-Date overflow (which used the server's own
+    // runtime timezone, not the profile's, and drifted an hour around the
+    // UK's spring/autumn clock change).
+    dtStart = zonedWallTimeToUtc(job.date, clockTime.startMinutes, timezone);
+    dtEnd = zonedWallTimeToUtc(job.date, clockTime.endMinutes, timezone);
   }
 
   const summaryParts = [job.customer_name];
@@ -217,7 +239,7 @@ export function jobToICalEvent(
     dtEnd,
     summary,
     location: job.address,
-    description: descriptionLines.join("\\n"),
+    description: descriptionLines.join("\n"),
     url: `${baseUrl.replace(/\/$/, "")}/review/${job.date}#${job.id}`,
     sequence: 0,
     isAllDay,

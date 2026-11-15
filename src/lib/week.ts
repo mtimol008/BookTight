@@ -106,6 +106,74 @@ export function getNowMinutesInTimezone(
   return hour * 60 + minute;
 }
 
+/** Add (positive or negative) whole days to a "YYYY-MM-DD" string — pure
+ *  calendar-date arithmetic, not clock time, so it's unaffected by DST or
+ *  the server's own runtime timezone. */
+function addDaysToDateString(dateString: string, days: number): string {
+  const date = new Date(dateString + "T00:00:00");
+  date.setDate(date.getDate() + days);
+  return toISODate(date);
+}
+
+/**
+ * The real UTC instant for a wall-clock date + minutes-since-midnight read
+ * in `timezone` — the inverse of getTodayDateStringInTimezone /
+ * getNowMinutesInTimezone. `minutesSinceMidnight` may be negative or
+ * exceed 1440; it overflows onto an earlier/later calendar date exactly
+ * like Date.setMinutes does, but measured in `timezone`'s own days rather
+ * than the server's.
+ *
+ * Intl can only go instant -> wall time, not the reverse, so this uses the
+ * standard double-read correction: guess the instant as if `timezone` were
+ * UTC, read what that guess actually looks like in `timezone`, and shift
+ * by the difference. That difference is `timezone`'s real UTC offset AT
+ * the guessed instant — which is what makes this resolve correctly on
+ * either side of a DST transition, unlike raw local-Date arithmetic (the
+ * bug this was written to fix: a job's exported start/end time drifting by
+ * an hour around the UK's spring/autumn clock change, depending on the
+ * server's own unrelated runtime timezone).
+ */
+export function zonedWallTimeToUtc(
+  dateString: string,
+  minutesSinceMidnight: number,
+  timezone: string
+): Date {
+  const dayOffset = Math.floor(minutesSinceMidnight / 1440);
+  const remaining = minutesSinceMidnight - dayOffset * 1440;
+  const hours = Math.floor(remaining / 60);
+  const minutes = remaining % 60;
+  const targetDate = addDaysToDateString(dateString, dayOffset);
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  const naiveUtc = new Date(`${targetDate}T${pad(hours)}:${pad(minutes)}:00Z`);
+
+  const format = (tz: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(naiveUtc);
+
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = format(timezone || FALLBACK_TIMEZONE);
+  } catch {
+    parts = format(FALLBACK_TIMEZONE);
+  }
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  const asIfUtc = new Date(
+    `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}Z`
+  );
+  const offsetMs = naiveUtc.getTime() - asIfUtc.getTime();
+  return new Date(naiveUtc.getTime() + offsetMs);
+}
+
 export interface MonthRange {
   startDate: string; // "YYYY-MM-DD", 1st of the month
   endDate: string; // "YYYY-MM-DD", last day of the month
