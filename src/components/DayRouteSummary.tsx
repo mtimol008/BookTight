@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatDistance, formatSuggestionDate, type DistanceUnit } from "@/lib/format";
 import type { DayReviewStatus, JobRecord } from "@/lib/jobs";
 import { formatMinutesAsClock, parseTimeToMinutes, type TimeSlotType } from "@/lib/scheduling";
+import { getCurrentWeekRange } from "@/lib/week";
 
 const TIME_SLOT_LABELS: Record<TimeSlotType, string> = {
   none: "Flexible",
@@ -71,10 +72,17 @@ export function DayRouteSummary({
         ) : (
           // Calendar's own view is read-only — this is the way back into
           // This Week's editable table, landed on the week that contains
-          // this exact day (parseWeekParam snaps any date to its Monday),
-          // so a job booked weeks out is actually reachable to edit,
-          // reschedule or cancel, not just visible here.
-          <Link href={`/?week=${date}`} className="btn btn--outline btn--sm btn--pill">
+          // this exact day, so a job booked weeks out is actually
+          // reachable to edit, reschedule or cancel, not just visible
+          // here. Links straight to that week's canonical ?week= value
+          // (its Monday) rather than this exact day — This Week redirects
+          // a non-canonical value to the same place anyway, but there's
+          // no reason to spend a round trip on that redirect when this
+          // already knows the canonical date.
+          <Link
+            href={`/?week=${getCurrentWeekRange(new Date(date + "T00:00:00")).startDate}`}
+            className="btn btn--outline btn--sm btn--pill"
+          >
             Edit this week
           </Link>
         )}
