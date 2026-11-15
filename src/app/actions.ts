@@ -467,10 +467,16 @@ export async function getSchedulingSuggestion(
   // the same near-term window as a normal or urgent request.
   const lookaheadWeeks =
     urgency === "whenever" ? WHENEVER_LOOKAHEAD_WEEKS : SUGGESTION_LOOKAHEAD_WEEKS;
-  const { startDate: currentMonday } = getCurrentWeekRange();
+  const now = nowForScheduling(profile);
+  // The user's own today (above), not the server's — otherwise this
+  // window's start can land on last week's Monday for up to an hour
+  // around the user's local midnight, shifting every candidate date with
+  // it.
+  const { startDate: currentMonday } = getCurrentWeekRange(
+    new Date(now.todayDate + "T00:00:00")
+  );
   const { endDate } = getWeekRange(currentMonday, lookaheadWeeks);
   const weekJobs = await getJobsForWeek(currentMonday, endDate);
-  const now = nowForScheduling(profile);
   // Exclude days that have already passed — the range always starts on
   // this week's Monday, but a day before today isn't actually bookable
   // anymore. The user's own today, not the server's (see nowForScheduling).

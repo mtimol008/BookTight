@@ -140,14 +140,16 @@ export default async function Home({
     redirect(`/?week=${startDate}`);
   }
 
-  const currentWeek = getCurrentWeekRange();
-  const isCurrentWeek = startDate === currentWeek.startDate;
-  const prevWeekHref = `/?week=${formatWeekParam(shiftWeek(new Date(startDate + "T00:00:00"), -1))}`;
-  const nextWeekHref = `/?week=${formatWeekParam(shiftWeek(new Date(startDate + "T00:00:00"), 1))}`;
-
   const today = profile
     ? getTodayDateStringInTimezone(profile.timezone)
     : getTodayDateString();
+  // The user's own "today" (above), not the server's — otherwise "this
+  // week" can disagree with isCurrentWeek for up to an hour around the
+  // user's local midnight.
+  const currentWeek = getCurrentWeekRange(new Date(today + "T00:00:00"));
+  const isCurrentWeek = startDate === currentWeek.startDate;
+  const prevWeekHref = `/?week=${formatWeekParam(shiftWeek(new Date(startDate + "T00:00:00"), -1))}`;
+  const nextWeekHref = `/?week=${formatWeekParam(shiftWeek(new Date(startDate + "T00:00:00"), 1))}`;
   const [jobs, unreviewed, totalJobCount] = await Promise.all([
     getJobsForWeek(startDate, endDate),
     getUnreviewedSummary(today),

@@ -1,7 +1,7 @@
 import { getProfileByFeedToken } from "@/lib/calendarFeed";
 import { getJobsForWeekByUserId } from "@/lib/jobs";
 import { deriveClockTimes, generateICalFeed, jobToICalEvent } from "@/lib/ical";
-import { getCurrentWeekRange, getWeekRange } from "@/lib/week";
+import { getCurrentWeekRange, getTodayDateStringInTimezone, getWeekRange } from "@/lib/week";
 import { getSubscriptionByUserId } from "@/lib/subscriptions";
 import { lapsedSince } from "@/lib/entitlement";
 
@@ -34,7 +34,11 @@ export async function GET(
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const { startDate } = getCurrentWeekRange();
+  // The feed owner's own "today", not the server's (Vercel runs in UTC) —
+  // otherwise the 12-week window can start a week too early for up to an
+  // hour around the owner's local midnight.
+  const today = getTodayDateStringInTimezone(profile.timezone);
+  const { startDate } = getCurrentWeekRange(new Date(today + "T00:00:00"));
   const { endDate: futureEndDate } = getWeekRange(startDate, 12);
 
   const jobs = await getJobsForWeekByUserId(profile.id, startDate, futureEndDate);
@@ -45,7 +49,7 @@ export async function GET(
     jobs
   );
   const events = jobs.map((job) =>
-    jobToICalEvent(job, baseUrl, clockTimes.get(job.id) ?? null)
+    jobToICalEvent(job, baseUrl, clockTimes.get(job.id) ?? null, profile.timezone)
   );
 
   const icsContent = generateICalFeed(events, profile.timezone);
