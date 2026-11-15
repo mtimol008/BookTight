@@ -25,7 +25,7 @@ export default function TermsPage() {
       <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
         <h1 className="screen-title" style={{ marginBottom: 10 }}>Terms of Service</h1>
         <p className="legal-meta">
-          Last updated: 27 October 2026 &middot; Version: {TERMS_VERSION}
+          Last updated: 15 November 2026 &middot; Version: {TERMS_VERSION}
         </p>
 
         <div className="legal-doc">
@@ -39,11 +39,11 @@ export default function TermsPage() {
           <h2>2. Who can use BookTight</h2>
           <p>BookTight is for people aged 18 or over who use it for their trade or business.</p>
 
-          <h2>3. Beta period</h2>
+          <h2>3. While we&apos;re building this</h2>
           <p>
-            While BookTight is in beta it may change, have faults or be withdrawn. We will try to
-            give notice of major changes. Please use the export feature to keep your own copy of
-            your data.
+            BookTight is free while we finish building it, and may still change, have faults, or
+            be withdrawn in the meantime. We will try to give notice of major changes. Please use
+            the export feature to keep your own copy of your data.
           </p>
 
           <h2>4. What BookTight does</h2>
@@ -78,11 +78,11 @@ export default function TermsPage() {
             it. You can export your data at any time from Account.
           </p>
 
-          <h2>8. Cost during the beta</h2>
+          <h2>8. Cost while we&apos;re building this</h2>
           <p>
-            BookTight is free during the beta. We plan to introduce paid plans later. Before we
-            charge you anything, we will tell you the price and give you notice, and you can
-            choose whether to continue.
+            BookTight is free while we finish building it. We plan to introduce paid plans later.
+            Before we charge you anything, we will tell you the price and give you notice, and you
+            can choose whether to continue.
           </p>
 
           <h2>9. If paid plans are introduced</h2>
