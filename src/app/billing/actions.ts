@@ -1,5 +1,6 @@
 "use server";
 
+import type Stripe from "stripe";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentSubscription } from "@/lib/subscriptions";
@@ -44,20 +45,31 @@ export async function createCheckoutSession(formData: FormData): Promise<void> {
   }
 
   const stripe = getStripeClient();
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    line_items: [{ price: priceId, quantity: 1 }],
-    // Both set here, read back by the webhook two different ways
-    // depending on which event it's handling — see that route's own
-    // comment for why that's what makes event order not matter.
-    client_reference_id: user.id,
-    subscription_data: { metadata: { user_id: user.id } },
-    ...(subscription?.stripe_customer_id
-      ? { customer: subscription.stripe_customer_id }
-      : { customer_email: user.email }),
-    success_url: `${appUrl()}/billing?checkout=success`,
-    cancel_url: `${appUrl()}/billing?checkout=cancelled`,
-  });
+  // A Stripe outage/timeout/API error throws here — uncaught, that's an
+  // unhandled exception in a Server Action, which in a real production
+  // build redacts to a digest the user can't act on (the same class of
+  // bug confirmed live for geocoding in actions.ts). Caught here instead,
+  // so it reaches the user as the same clean /billing?error= redirect
+  // every other failure on this page already uses.
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      // Both set here, read back by the webhook two different ways
+      // depending on which event it's handling — see that route's own
+      // comment for why that's what makes event order not matter.
+      client_reference_id: user.id,
+      subscription_data: { metadata: { user_id: user.id } },
+      ...(subscription?.stripe_customer_id
+        ? { customer: subscription.stripe_customer_id }
+        : { customer_email: user.email }),
+      success_url: `${appUrl()}/billing?checkout=success`,
+      cancel_url: `${appUrl()}/billing?checkout=cancelled`,
+    });
+  } catch {
+    redirectWithError("Couldn't start checkout right now. Please try again in a moment.");
+  }
 
   if (!session.url) {
     redirectWithError("Stripe did not return a Checkout URL.");
