@@ -77,6 +77,35 @@ export async function POST(request: Request) {
   return new Response("OK", { status: 200 });
 }
 
+/**
+ * Every subscriptions-table write in handleEvent goes through this instead
+ * of calling .update() directly — a plain .update().eq("user_id", userId)
+ * silently matches zero rows if that user_id has no subscriptions row
+ * (data drift: a row never created, a user since deleted, etc.), and
+ * Stripe still gets its 200, so nothing anywhere would otherwise say this
+ * event had no effect. Still returns 200 to Stripe either way — a user_id
+ * that will never have a matching row isn't something retrying fixes.
+ */
+async function updateSubscriptionRow(
+  admin: AdminClient,
+  userId: string,
+  eventType: string,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const { error, count } = await admin
+    .from("subscriptions")
+    .update(fields, { count: "exact" })
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+
+  if (!count) {
+    Sentry.captureMessage(
+      `Stripe webhook ${eventType}: no subscriptions row for user_id ${userId}`,
+      { level: "warning", tags: { stripeEventType: eventType, userId } }
+    );
+  }
+}
+
 async function handleEvent(admin: AdminClient, event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
@@ -96,15 +125,11 @@ async function handleEvent(admin: AdminClient, event: Stripe.Event): Promise<voi
       // come from customer.subscription.created, which fires for every
       // new subscription regardless of which of the two events lands
       // first.
-      const { error } = await admin
-        .from("subscriptions")
-        .update({
-          stripe_customer_id: customerId ?? null,
-          stripe_subscription_id: subscriptionId ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId);
-      if (error) throw new Error(error.message);
+      await updateSubscriptionRow(admin, userId, event.type, {
+        stripe_customer_id: customerId ?? null,
+        stripe_subscription_id: subscriptionId ?? null,
+        updated_at: new Date().toISOString(),
+      });
 
       // This is the one-time "they just became a paying customer" moment
       // — a completed Checkout only ever happens once per subscription,
@@ -127,20 +152,16 @@ async function handleEvent(admin: AdminClient, event: Stripe.Event): Promise<voi
       const customerId =
         typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
 
-      const { error } = await admin
-        .from("subscriptions")
-        .update({
-          stripe_customer_id: customerId,
-          stripe_subscription_id: subscription.id,
-          status: subscription.status,
-          plan: priceIdToPlan(item?.price.id),
-          current_period_end: item ? new Date(item.current_period_end * 1000).toISOString() : null,
-          cancel_at_period_end: subscription.cancel_at_period_end,
-          cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId);
-      if (error) throw new Error(error.message);
+      await updateSubscriptionRow(admin, userId, event.type, {
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscription.id,
+        status: subscription.status,
+        plan: priceIdToPlan(item?.price.id),
+        current_period_end: item ? new Date(item.current_period_end * 1000).toISOString() : null,
+        cancel_at_period_end: subscription.cancel_at_period_end,
+        cancel_at: subscription.cancel_at ? new Date(subscription.cancel_at * 1000).toISOString() : null,
+        updated_at: new Date().toISOString(),
+      });
       break;
     }
 
@@ -160,12 +181,55 @@ async function handleEvent(admin: AdminClient, event: Stripe.Event): Promise<voi
       // active) already arrives via subscription.updated, which Stripe
       // always sends alongside a successful payment.
       if (event.type === "invoice.payment_failed") {
-        const { error } = await admin
-          .from("subscriptions")
-          .update({ status: "past_due", updated_at: new Date().toISOString() })
-          .eq("user_id", userId);
-        if (error) throw new Error(error.message);
+        await updateSubscriptionRow(admin, userId, event.type, {
+          status: "past_due",
+          updated_at: new Date().toISOString(),
+        });
       }
+      break;
+    }
+
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
+      const isFullRefund = charge.amount_refunded >= charge.amount;
+
+      // Charges don't carry our own user_id the way subscriptions/invoices
+      // do (no metadata set on them at creation) — resolve via the Stripe
+      // customer id we already stored, instead of threading a new
+      // metadata convention through just for this one event.
+      const { data: row } = customerId
+        ? await admin
+            .from("subscriptions")
+            .select("user_id")
+            .eq("stripe_customer_id", customerId)
+            .maybeSingle()
+        : { data: null };
+
+      // Deliberately NOT auto-cancelling here: the Terms' 14-day refund is
+      // staff-initiated from the Stripe dashboard, and a refund doesn't
+      // always mean "end access today" (a partial goodwill refund
+      // shouldn't touch access at all, and even a full one might be for a
+      // past period already consumed). Flagging loudly so a human decides
+      // is the safer default — see the fix's own writeup for why.
+      Sentry.captureMessage(
+        `Stripe refund (${isFullRefund ? "full" : "partial"}): charge ${charge.id}` +
+          (row?.user_id ? ` for user_id ${row.user_id}` : " — no matching subscriptions row"),
+        {
+          level: isFullRefund ? "warning" : "info",
+          tags: {
+            stripeEventType: event.type,
+            refundType: isFullRefund ? "full" : "partial",
+            userId: row?.user_id ?? "unknown",
+          },
+          extra: {
+            chargeId: charge.id,
+            customerId: customerId ?? null,
+            amount: charge.amount,
+            amountRefunded: charge.amount_refunded,
+          },
+        }
+      );
       break;
     }
 

@@ -30,6 +30,7 @@ const ENABLED_EVENTS = [
   "invoice.paid",
   "invoice.payment_failed",
   "customer.subscription.trial_will_end",
+  "charge.refunded",
 ];
 
 const secretKey = process.env.STRIPE_SECRET_KEY;
