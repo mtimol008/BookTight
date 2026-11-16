@@ -54,12 +54,22 @@ export async function getJobsForWeek(
   return data ?? [];
 }
 
+// PostgREST's own default page size — a single unranged select silently
+// stops here. getAllJobsForCurrentUser pages past it explicitly, since an
+// export that just shrugged at the cap would misrepresent a prolific
+// account's own history exactly like silently dropping cancelled jobs would.
+const EXPORT_PAGE_SIZE = 1000;
+
 /**
  * Every job the account has ever booked, any status, unscoped by date —
  * for the data-export feature, where "export your data" means everything,
  * not just the active route. Unlike getJobsForWeek, cancelled jobs stay in
  * (an export that silently dropped them would misrepresent the account's
  * own history).
+ *
+ * Pages through in EXPORT_PAGE_SIZE batches rather than one unranged
+ * select, which PostgREST would otherwise cap at its own default page size
+ * — fine for ordinary accounts, silently truncating a long-running one.
  */
 export async function getAllJobsForCurrentUser(): Promise<JobRecord[]> {
   const supabase = await createClient();
@@ -71,19 +81,38 @@ export async function getAllJobsForCurrentUser(): Promise<JobRecord[]> {
     return [];
   }
 
-  // Explicit user_id filter as a backstop alongside RLS — this feeds the
-  // data-export endpoint, so a future RLS regression here would otherwise
-  // have no second line of defense before it started handing out every
-  // account's jobs to whoever asked.
-  const { data, error } = await withAuthRetry(() =>
-    supabase.from("jobs").select("*").eq("user_id", user.id).order("date", { ascending: true })
-  );
+  const allJobs: JobRecord[] = [];
+  for (let offset = 0; ; offset += EXPORT_PAGE_SIZE) {
+    // Explicit user_id filter as a backstop alongside RLS — this feeds the
+    // data-export endpoint, so a future RLS regression here would otherwise
+    // have no second line of defense before it started handing out every
+    // account's jobs to whoever asked.
+    const { data, error } = await withAuthRetry(() =>
+      supabase
+        .from("jobs")
+        .select("*")
+        .eq("user_id", user.id)
+        // id as a secondary sort: date alone isn't unique, and an unstable
+        // order across pages could skip or duplicate rows at a page
+        // boundary where several jobs share the same date.
+        .order("date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + EXPORT_PAGE_SIZE - 1)
+    );
 
-  if (error) {
-    throw new Error(`Failed to fetch jobs: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to fetch jobs: ${error.message}`);
+    }
+
+    const page = data ?? [];
+    allJobs.push(...page);
+
+    if (page.length < EXPORT_PAGE_SIZE) {
+      break;
+    }
   }
 
-  return data ?? [];
+  return allJobs;
 }
 
 /**
