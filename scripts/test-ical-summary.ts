@@ -6,6 +6,10 @@
 // description, so a multi-line description gave the event a multi-line
 // title in calendar apps.
 //
+// Also covers a job whose planned time is a fractional minute (travel time
+// pushing it past its slot anchor), which used to throw and 500 the whole
+// feed — found on staging.
+//
 // The feed is generated in child processes under TZ=UTC and
 // TZ=Europe/London and must come out identical (Vercel runs in UTC; a dev
 // machine usually doesn't). Pure — no database, no network.
@@ -78,14 +82,46 @@ async function workerMain() {
       "Europe/London"
     )
   );
-  const feed = generateICalFeed(events, "Europe/London")
-    .split("\r\n")
-    .filter((l) => !l.startsWith("DTSTAMP:")) // the only line that legitimately differs run to run
-    .join("\r\n");
-  process.stdout.write(JSON.stringify({ processTZ: process.env.TZ ?? "(unset)", feed }));
+  const stripStamp = (ics: string) =>
+    ics
+      .split("\r\n")
+      .filter((l) => !l.startsWith("DTSTAMP:")) // the only line that legitimately differs run to run
+      .join("\r\n");
+  const feed = stripStamp(generateICalFeed(events, "Europe/London"));
+
+  // The exact day that crashed the staging feed with a 500: a flexible job
+  // first, then a "morning" job, both a few km from home. Travel time
+  // pushes the morning job past its 09:00 anchor by a fractional number of
+  // minutes (543.997...), which used to build an Invalid Date. Runs through
+  // the real planner (deriveClockTimes), exactly like the feed route does.
+  const { deriveClockTimes } = await import("../src/lib/ical");
+  const hours = (enabled: boolean) => ({ enabled, start: "08:00", end: "18:00" });
+  const workingHours = { mon: hours(true), tue: hours(true), wed: hours(true), thu: hours(true), fri: hours(true), sat: hours(false), sun: hours(false) };
+  const crashJobs = [
+    { ...BASE, id: "bbbbbbbb-0000-0000-0000-000000000001", date: "2026-11-16", customer_name: "Helen Marsh", description: "Annual boiler service", address: "22 Cotham Hill, Bristol BS6 6LF", latitude: 51.455, longitude: -2.62, time_slot_type: "morning", specific_time: null, duration_minutes: 60 },
+    { ...BASE, id: "bbbbbbbb-0000-0000-0000-000000000002", date: "2026-11-16", customer_name: "No Description Ltd", description: null, address: "1 Test Street, Bristol", latitude: 51.455, longitude: -2.62, time_slot_type: "none", specific_time: null, duration_minutes: 60 },
+  ] as unknown as import("../src/lib/jobs").JobRecord[];
+  const clockTimes = deriveClockTimes({ latitude: 51.47, longitude: -2.59 }, workingHours as never, crashJobs);
+  const morningClock = clockTimes.get("bbbbbbbb-0000-0000-0000-000000000001") ?? null;
+  let crashFeed = "";
+  let crashError = "";
+  try {
+    crashFeed = stripStamp(
+      generateICalFeed(
+        crashJobs.map((j) => jobToICalEvent(j, "https://booktight.co.uk", clockTimes.get(j.id) ?? null, "Europe/London")),
+        "Europe/London"
+      )
+    );
+  } catch (err) {
+    crashError = (err as Error).message;
+  }
+
+  process.stdout.write(
+    JSON.stringify({ processTZ: process.env.TZ ?? "(unset)", feed, morningStart: morningClock?.startMinutes ?? null, crashFeed, crashError })
+  );
 }
 
-function runWorker(tz: string): { processTZ: string; feed: string } {
+function runWorker(tz: string): { processTZ: string; feed: string; morningStart: number | null; crashFeed: string; crashError: string } {
   const result = spawnSync(
     process.execPath,
     [path.join(process.cwd(), "node_modules/tsx/dist/cli.mjs"), __filename, "--worker"],
@@ -165,7 +201,26 @@ async function main() {
     check(`[${label}] blank leading lines skipped for SUMMARY`, blank.SUMMARY === "Blank First Line — Actual first line", blank.SUMMARY);
     check(`[${label}] all-day event still a date`, blank.DTSTART === "20261119" && blank.DTEND === "20261120", `${blank.DTSTART}/${blank.DTEND}`);
     check(`[${label}] timed event keeps its London wall time`, cafe.DTSTART === "20261119T133000", cafe.DTSTART);
+
+    // Fractional planner minutes (the staging 500).
+    check(
+      `[${label}] setup: the planner really does give this job a fractional start`,
+      run.morningStart !== null && !Number.isInteger(run.morningStart),
+      String(run.morningStart)
+    );
+    check(`[${label}] feed builds without throwing for a fractional start`, run.crashError === "", run.crashError);
+    const morning = eventsOf(run.crashFeed).find((e) => e.SUMMARY?.startsWith("Helen Marsh"));
+    const expectedStart = run.morningStart === null ? "" : `20261116T${String(Math.floor(Math.round(run.morningStart) / 60)).padStart(2, "0")}${String(Math.round(run.morningStart) % 60).padStart(2, "0")}00`;
+    check(
+      `[${label}] that event starts at the planner time rounded to the minute`,
+      !!morning && morning.DTSTART === expectedStart,
+      `${morning?.DTSTART} (expected ${expectedStart})`
+    );
   }
+  check(
+    "fractional-start feed is identical under TZ=UTC and TZ=Europe/London",
+    utc.crashFeed === london.crashFeed && utc.crashFeed.length > 0
+  );
 
   if (failures > 0) {
     console.error(`\n${failures} check(s) failed.`);
