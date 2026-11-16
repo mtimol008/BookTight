@@ -132,14 +132,21 @@ function addDaysToDateString(dateString: string, days: number): string {
  * bug this was written to fix: a job's exported start/end time drifting by
  * an hour around the UK's spring/autumn clock change, depending on the
  * server's own unrelated runtime timezone).
+ *
+ * `minutesSinceMidnight` is rounded to the nearest whole minute first. The
+ * day planner adds haversine travel time, so a job pushed past its slot's
+ * anchor by travel gets a fractional time (e.g. 543.997); unrounded, that
+ * built "09:03.997" — an Invalid Date that threw inside Intl and took the
+ * whole calendar feed down with a 500.
  */
 export function zonedWallTimeToUtc(
   dateString: string,
   minutesSinceMidnight: number,
   timezone: string
 ): Date {
-  const dayOffset = Math.floor(minutesSinceMidnight / 1440);
-  const remaining = minutesSinceMidnight - dayOffset * 1440;
+  const wholeMinutes = Math.round(minutesSinceMidnight);
+  const dayOffset = Math.floor(wholeMinutes / 1440);
+  const remaining = wholeMinutes - dayOffset * 1440;
   const hours = Math.floor(remaining / 60);
   const minutes = remaining % 60;
   const targetDate = addDaysToDateString(dateString, dayOffset);
