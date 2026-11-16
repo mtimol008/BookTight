@@ -6,7 +6,7 @@ import {
   getJobById,
   getJobsForWeek,
   getTotalJobCount,
-  insertJob,
+  insertJobWithDedup,
   JobNotFoundError,
   setJobStatuses,
   setManualPositions,
@@ -901,7 +901,15 @@ export async function confirmAndSaveJob(
     );
   }
 
-  await insertJob({
+  // Atomic — closes the gap a raw double Next-Action request could still
+  // hit even though the client disables the submit button during its
+  // pending transition: a plain check-then-insert here can't stop two
+  // near-simultaneous calls both passing the check before either commits,
+  // but create_job_if_not_duplicate's own advisory lock can. Returns the
+  // job this call just created, or the one an overlapping duplicate call
+  // already did — either way, safe to run the bookkeeping below once more
+  // (recordEvent is itself idempotent).
+  await insertJobWithDedup({
     address: geocoded.formattedAddress,
     latitude: geocoded.latitude,
     longitude: geocoded.longitude,

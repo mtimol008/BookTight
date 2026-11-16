@@ -350,27 +350,42 @@ export interface NewJobInput {
   urgency: string;
 }
 
-export async function insertJob(job: NewJobInput): Promise<JobRecord> {
+/**
+ * Same insert confirmAndSaveJob needs, but done atomically inside a
+ * Postgres function (create_job_if_not_duplicate — see its own migration)
+ * rather than as a separate check-then-insert here: a plain SELECT then
+ * INSERT from this process can't close the race where a raw double
+ * Next-Action request (bypassing the client's disabled-submit-button
+ * guard) lands as two near-simultaneous calls that both pass the check
+ * before either INSERT commits — confirmed to actually happen without
+ * the function's own advisory lock. Returns the job just created, or the
+ * one a near-simultaneous duplicate call already created (same user, same
+ * customer name, date, and time slot, inserted in the last few seconds —
+ * generous on purpose, to also catch a slower accidental double-click,
+ * without being long enough to collide with a genuinely new job booked
+ * moments after a previous one for the same repeat customer).
+ */
+export async function insertJobWithDedup(job: NewJobInput): Promise<JobRecord> {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error("You must be logged in to add a job.");
-  }
-
-  const { data, error } = await supabase
-    .from("jobs")
-    .insert({ ...job, user_id: user.id })
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc("create_job_if_not_duplicate", {
+    p_address: job.address,
+    p_latitude: job.latitude,
+    p_longitude: job.longitude,
+    p_date: job.date,
+    p_time_slot_type: job.time_slot_type,
+    p_specific_time: job.specific_time,
+    p_customer_name: job.customer_name,
+    p_description: job.description,
+    p_duration_minutes: job.duration_minutes,
+    p_urgency: job.urgency,
+  });
 
   if (error) {
     throw new Error(`Failed to save job: ${error.message}`);
   }
 
-  return data;
+  return data as JobRecord;
 }
 
 export interface UpdateJobInput extends NewJobInput {
