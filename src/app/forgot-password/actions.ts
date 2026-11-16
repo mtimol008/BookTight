@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { sendPasswordResetEmail } from "@/lib/passwordReset";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { checkIpRateLimit, getClientIp } from "@/lib/rateLimit";
 import { headers } from "next/headers";
@@ -48,13 +48,11 @@ export async function requestPasswordReset(
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
-  const supabase = await createClient();
   // Deliberately ignore the result — always show the same message whether
   // or not the email belongs to an account, so this can't be used to
-  // check which addresses have signed up.
-  await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${appUrl}/reset-password`,
-  });
+  // check which addresses have signed up. (Not the cookie-based server
+  // client: see sendPasswordResetEmail for why.)
+  await sendPasswordResetEmail(email, `${appUrl}/reset-password`);
 
   return {
     message: "If that email has an account, a reset link is on its way.",

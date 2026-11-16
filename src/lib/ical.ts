@@ -190,6 +190,31 @@ export function deriveClockTimes(
   return result;
 }
 
+/** Longest an event title gets, in characters, including the ellipsis. */
+export const SUMMARY_MAX_LENGTH = 60;
+
+/**
+ * The calendar event's title: "Customer — first line of description",
+ * cut to SUMMARY_MAX_LENGTH with "…". Calendar apps show SUMMARY in a
+ * small box (and a multi-line description used to give events multi-line
+ * titles), so the full text goes in DESCRIPTION instead. Counts by
+ * Unicode code point, so an emoji is never cut in half.
+ */
+export function buildEventSummary(customerName: string, description: string | null | undefined): string {
+  const firstLine =
+    (description ?? "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? "";
+  const full = firstLine ? `${customerName.trim()} — ${firstLine}` : customerName.trim();
+
+  const chars = Array.from(full);
+  if (chars.length <= SUMMARY_MAX_LENGTH) {
+    return full;
+  }
+  return chars.slice(0, SUMMARY_MAX_LENGTH - 1).join("").trimEnd() + "…";
+}
+
 export function jobToICalEvent(
   job: JobRecord,
   baseUrl: string,
@@ -220,12 +245,9 @@ export function jobToICalEvent(
     dtEnd = zonedWallTimeToUtc(job.date, clockTime.endMinutes, timezone);
   }
 
-  const summaryParts = [job.customer_name];
-  if (job.description) {
-    summaryParts.push(job.description);
-  }
-  const summary = summaryParts.join(" — ");
+  const summary = buildEventSummary(job.customer_name, job.description);
 
+  // The full description (every line of it) lives here, not in SUMMARY.
   const descriptionLines = [];
   if (job.description) {
     descriptionLines.push(job.description);
