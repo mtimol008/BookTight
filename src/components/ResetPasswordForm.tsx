@@ -15,6 +15,14 @@ type Status = "checking" | "ready" | "invalid" | "saved";
  * which the server never sees), so this form talks to Supabase directly
  * rather than through a server action — there's no cookie-sync delay to
  * work around that way.
+ *
+ * The recovery link uses the legacy hash-fragment format
+ * (#access_token=...&refresh_token=...&type=recovery), not a PKCE `?code=`
+ * — and the shared browser client (src/lib/supabase/client.ts) can't be
+ * switched to implicit flow to auto-detect that (@supabase/ssr's
+ * createBrowserClient hard-codes flowType: "pkce" regardless of what's
+ * passed in). So this reads the fragment itself and calls setSession()
+ * directly, rather than relying on the client's own URL detection.
  */
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -26,32 +34,34 @@ export function ResetPasswordForm() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
+    async function processRecoveryLink() {
+      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+      const params = new URLSearchParams(hash);
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      const type = params.get("type");
 
-    // PASSWORD_RECOVERY fires once the SDK finishes processing the
-    // recovery tokens from the URL — more reliable than a one-shot
-    // getSession() check, since that processing happens asynchronously
-    // right after the page loads.
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" && session) {
-        setStatus("ready");
+      if (!accessToken || !refreshToken || type !== "recovery") {
+        // No recovery tokens at all (direct visit), or Supabase's own
+        // error fragment for an expired/already-used link
+        // (#error=...&error_code=otp_expired&...).
+        setStatus("invalid");
+        return;
       }
-    });
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setStatus("ready");
-    });
+      const supabase = createClient();
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      // Clear the tokens from the address bar either way — they're
+      // single-use, and leaving them visible/bookmarkable serves no
+      // purpose once they've been consumed.
+      history.replaceState(null, "", window.location.pathname);
+      setStatus(setSessionError ? "invalid" : "ready");
+    }
 
-    // No recovery event within a few seconds means there was no valid
-    // token in the URL to begin with (direct visit, expired link, etc.).
-    const timeout = setTimeout(() => {
-      setStatus((current) => (current === "checking" ? "invalid" : current));
-    }, 3000);
-
-    return () => {
-      listener.subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
+    processRecoveryLink();
   }, []);
 
   async function handleSubmit(event: FormEvent) {

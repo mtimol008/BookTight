@@ -126,14 +126,30 @@ export default async function Home({
   const { week: weekParam } = await searchParams;
   const weekDate = parseWeekParam(weekParam);
   const { startDate, endDate } = getCurrentWeekRange(weekDate);
-  const currentWeek = getCurrentWeekRange();
-  const isCurrentWeek = startDate === currentWeek.startDate;
-  const prevWeekHref = `/?week=${formatWeekParam(shiftWeek(weekDate, -1))}`;
-  const nextWeekHref = `/?week=${formatWeekParam(shiftWeek(weekDate, 1))}`;
+
+  // Any day within a week (not just its Monday) is a valid ?week= value
+  // in — Calendar links to the specific day a job is on, and a hand-typed
+  // or bookmarked date could be any day too. Rather than let several
+  // different literal values that all mean "this same week" circulate as
+  // different URLs (and risk one of them serving a stale cached render
+  // while another doesn't), every one of them redirects here to the one
+  // canonical URL for that week: its Monday. Only when signed in — a
+  // signed-out visitor never reaches this far (see the LandingPage return
+  // above).
+  if (weekParam && weekParam !== startDate) {
+    redirect(`/?week=${startDate}`);
+  }
 
   const today = profile
     ? getTodayDateStringInTimezone(profile.timezone)
     : getTodayDateString();
+  // The user's own "today" (above), not the server's — otherwise "this
+  // week" can disagree with isCurrentWeek for up to an hour around the
+  // user's local midnight.
+  const currentWeek = getCurrentWeekRange(new Date(today + "T00:00:00"));
+  const isCurrentWeek = startDate === currentWeek.startDate;
+  const prevWeekHref = `/?week=${formatWeekParam(shiftWeek(new Date(startDate + "T00:00:00"), -1))}`;
+  const nextWeekHref = `/?week=${formatWeekParam(shiftWeek(new Date(startDate + "T00:00:00"), 1))}`;
   const [jobs, unreviewed, totalJobCount] = await Promise.all([
     getJobsForWeek(startDate, endDate),
     getUnreviewedSummary(today),

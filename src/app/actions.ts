@@ -6,7 +6,8 @@ import {
   getJobById,
   getJobsForWeek,
   getTotalJobCount,
-  insertJob,
+  insertJobWithDedup,
+  JobNotFoundError,
   setJobStatuses,
   setManualPositions,
   updateJob,
@@ -391,6 +392,32 @@ function buildTimeVerdict(
   return null;
 }
 
+/**
+ * geocodeAddress throws on a Mapbox failure/rate-limit/missing-token
+ * (see geocoding.ts) — a throw from here escapes every one of this file's
+ * three call sites uncaught, crashing to the error boundary and, in a real
+ * production build, redacting the message to a digest the user can't act
+ * on (confirmed live: a poisoned Mapbox token showed a bare error page and
+ * discarded the whole in-progress form). Wrapping it here turns that into
+ * the same ActionResult shape every other user-facing failure in this file
+ * already uses, so the caller gets a clean inline message and keeps its
+ * form data instead.
+ */
+async function safeGeocodeAddress(
+  address: string,
+  options: Parameters<typeof geocodeAddress>[1]
+): Promise<ActionResult<Awaited<ReturnType<typeof geocodeAddress>>>> {
+  try {
+    return ok(await geocodeAddress(address, options));
+  } catch (error) {
+    return fail(
+      error instanceof Error
+        ? error.message
+        : "Couldn't verify that address right now. Please try again in a moment."
+    );
+  }
+}
+
 /** The user's own wall-clock position right now, resolved via their stored
  *  profile timezone rather than the server's runtime clock (Vercel's Node
  *  processes run in UTC) — the difference that matters during BST, where
@@ -415,10 +442,14 @@ export async function getSchedulingSuggestion(
     );
   }
 
-  const geocoded = await geocodeAddress(address, {
+  const geocodeResult = await safeGeocodeAddress(address, {
     userId: profile.id,
     proximity: [profile.home_longitude, profile.home_latitude],
   });
+  if (!geocodeResult.ok) {
+    return fail(geocodeResult.error);
+  }
+  const geocoded = geocodeResult.data;
   if (!geocoded) {
     return fail(
       `Could not find coordinates for "${address}". Try a more specific address.`
@@ -436,10 +467,16 @@ export async function getSchedulingSuggestion(
   // the same near-term window as a normal or urgent request.
   const lookaheadWeeks =
     urgency === "whenever" ? WHENEVER_LOOKAHEAD_WEEKS : SUGGESTION_LOOKAHEAD_WEEKS;
-  const { startDate: currentMonday } = getCurrentWeekRange();
+  const now = nowForScheduling(profile);
+  // The user's own today (above), not the server's — otherwise this
+  // window's start can land on last week's Monday for up to an hour
+  // around the user's local midnight, shifting every candidate date with
+  // it.
+  const { startDate: currentMonday } = getCurrentWeekRange(
+    new Date(now.todayDate + "T00:00:00")
+  );
   const { endDate } = getWeekRange(currentMonday, lookaheadWeeks);
   const weekJobs = await getJobsForWeek(currentMonday, endDate);
-  const now = nowForScheduling(profile);
   // Exclude days that have already passed — the range always starts on
   // this week's Monday, but a day before today isn't actually bookable
   // anymore. The user's own today, not the server's (see nowForScheduling).
@@ -850,17 +887,29 @@ export async function confirmAndSaveJob(
   // which already does this. The cache (see geocoding.ts) makes this
   // cheap for the common case: the same address the suggestion step just
   // geocoded moments earlier.
-  const geocoded = await geocodeAddress(input.address, {
+  const geocodeResult = await safeGeocodeAddress(input.address, {
     userId: profile?.id,
     proximity: profile ? [profile.home_longitude, profile.home_latitude] : undefined,
   });
+  if (!geocodeResult.ok) {
+    return fail(geocodeResult.error);
+  }
+  const geocoded = geocodeResult.data;
   if (!geocoded) {
     return fail(
       `Could not find coordinates for "${input.address}". Try a more specific address.`
     );
   }
 
-  await insertJob({
+  // Atomic — closes the gap a raw double Next-Action request could still
+  // hit even though the client disables the submit button during its
+  // pending transition: a plain check-then-insert here can't stop two
+  // near-simultaneous calls both passing the check before either commits,
+  // but create_job_if_not_duplicate's own advisory lock can. Returns the
+  // job this call just created, or the one an overlapping duplicate call
+  // already did — either way, safe to run the bookkeeping below once more
+  // (recordEvent is itself idempotent).
+  await insertJobWithDedup({
     address: geocoded.formattedAddress,
     latitude: geocoded.latitude,
     longitude: geocoded.longitude,
@@ -926,10 +975,14 @@ export async function updateExistingJob(
 
   // Re-geocode on every edit (not just when the address looks different) so
   // stored coordinates never drift out of sync with the address text.
-  const geocoded = await geocodeAddress(input.address, {
+  const geocodeResult = await safeGeocodeAddress(input.address, {
     userId: profile?.id,
     proximity: profile ? [profile.home_longitude, profile.home_latitude] : undefined,
   });
+  if (!geocodeResult.ok) {
+    return fail(geocodeResult.error);
+  }
+  const geocoded = geocodeResult.data;
   if (!geocoded) {
     return fail(
       `Could not find coordinates for "${input.address}". Try a more specific address.`
@@ -950,19 +1003,26 @@ export async function updateExistingJob(
     !!current &&
     (current.date !== input.date || current.time_slot_type !== input.timeSlotType);
 
-  await updateJob(input.id, {
-    address: geocoded.formattedAddress,
-    latitude: geocoded.latitude,
-    longitude: geocoded.longitude,
-    date: input.date,
-    time_slot_type: input.timeSlotType,
-    specific_time: input.specificTime,
-    customer_name: input.customerName,
-    description: input.description,
-    duration_minutes: input.durationMinutes,
-    urgency: input.urgency ?? current?.urgency ?? "normal",
-    ...(movedGroups ? { manual_position: null } : {}),
-  });
+  try {
+    await updateJob(input.id, {
+      address: geocoded.formattedAddress,
+      latitude: geocoded.latitude,
+      longitude: geocoded.longitude,
+      date: input.date,
+      time_slot_type: input.timeSlotType,
+      specific_time: input.specificTime,
+      customer_name: input.customerName,
+      description: input.description,
+      duration_minutes: input.durationMinutes,
+      urgency: input.urgency ?? current?.urgency ?? "normal",
+      ...(movedGroups ? { manual_position: null } : {}),
+    });
+  } catch (error) {
+    if (error instanceof JobNotFoundError) {
+      return fail(error.message);
+    }
+    throw error;
+  }
 
   revalidatePath("/");
   return ok(await checkAhaMoment(input.date));

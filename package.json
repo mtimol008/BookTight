@@ -14,6 +14,10 @@
     "test:deletion-cron-route": "node --env-file=.env.local scripts/test-deletion-cron-route.mjs",
     "test:email-links": "tsx scripts/test-email-links.mjs",
     "test:security-fixes": "tsx --env-file=.env.local scripts/test-security-fixes.ts",
+    "test:week-nav-fixes": "tsx --env-file=.env.local scripts/test-week-nav-fixes.ts",
+    "test:audit-fixes-2": "tsx --env-file=.env.local scripts/test-audit-fixes-2.ts",
+    "test:audit-fixes-3": "tsx --env-file=.env.local scripts/test-audit-fixes-3.ts",
+    "test:password-reset": "tsx --env-file=.env.local scripts/test-password-reset.ts",
     "screenshots:seed": "node --env-file=.env.local scripts/landing-screenshots/seed.mjs",
     "screenshots:capture": "node --env-file=.env.local scripts/landing-screenshots/capture.mjs",
     "screenshots:cleanup": "node --env-file=.env.local scripts/landing-screenshots/cleanup.mjs"

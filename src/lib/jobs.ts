@@ -54,12 +54,22 @@ export async function getJobsForWeek(
   return data ?? [];
 }
 
+// PostgREST's own default page size — a single unranged select silently
+// stops here. getAllJobsForCurrentUser pages past it explicitly, since an
+// export that just shrugged at the cap would misrepresent a prolific
+// account's own history exactly like silently dropping cancelled jobs would.
+const EXPORT_PAGE_SIZE = 1000;
+
 /**
  * Every job the account has ever booked, any status, unscoped by date —
  * for the data-export feature, where "export your data" means everything,
  * not just the active route. Unlike getJobsForWeek, cancelled jobs stay in
  * (an export that silently dropped them would misrepresent the account's
  * own history).
+ *
+ * Pages through in EXPORT_PAGE_SIZE batches rather than one unranged
+ * select, which PostgREST would otherwise cap at its own default page size
+ * — fine for ordinary accounts, silently truncating a long-running one.
  */
 export async function getAllJobsForCurrentUser(): Promise<JobRecord[]> {
   const supabase = await createClient();
@@ -71,19 +81,38 @@ export async function getAllJobsForCurrentUser(): Promise<JobRecord[]> {
     return [];
   }
 
-  // Explicit user_id filter as a backstop alongside RLS — this feeds the
-  // data-export endpoint, so a future RLS regression here would otherwise
-  // have no second line of defense before it started handing out every
-  // account's jobs to whoever asked.
-  const { data, error } = await withAuthRetry(() =>
-    supabase.from("jobs").select("*").eq("user_id", user.id).order("date", { ascending: true })
-  );
+  const allJobs: JobRecord[] = [];
+  for (let offset = 0; ; offset += EXPORT_PAGE_SIZE) {
+    // Explicit user_id filter as a backstop alongside RLS — this feeds the
+    // data-export endpoint, so a future RLS regression here would otherwise
+    // have no second line of defense before it started handing out every
+    // account's jobs to whoever asked.
+    const { data, error } = await withAuthRetry(() =>
+      supabase
+        .from("jobs")
+        .select("*")
+        .eq("user_id", user.id)
+        // id as a secondary sort: date alone isn't unique, and an unstable
+        // order across pages could skip or duplicate rows at a page
+        // boundary where several jobs share the same date.
+        .order("date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + EXPORT_PAGE_SIZE - 1)
+    );
 
-  if (error) {
-    throw new Error(`Failed to fetch jobs: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to fetch jobs: ${error.message}`);
+    }
+
+    const page = data ?? [];
+    allJobs.push(...page);
+
+    if (page.length < EXPORT_PAGE_SIZE) {
+      break;
+    }
   }
 
-  return data ?? [];
+  return allJobs;
 }
 
 /**
@@ -321,27 +350,42 @@ export interface NewJobInput {
   urgency: string;
 }
 
-export async function insertJob(job: NewJobInput): Promise<JobRecord> {
+/**
+ * Same insert confirmAndSaveJob needs, but done atomically inside a
+ * Postgres function (create_job_if_not_duplicate — see its own migration)
+ * rather than as a separate check-then-insert here: a plain SELECT then
+ * INSERT from this process can't close the race where a raw double
+ * Next-Action request (bypassing the client's disabled-submit-button
+ * guard) lands as two near-simultaneous calls that both pass the check
+ * before either INSERT commits — confirmed to actually happen without
+ * the function's own advisory lock. Returns the job just created, or the
+ * one a near-simultaneous duplicate call already created (same user, same
+ * customer name, date, and time slot, inserted in the last few seconds —
+ * generous on purpose, to also catch a slower accidental double-click,
+ * without being long enough to collide with a genuinely new job booked
+ * moments after a previous one for the same repeat customer).
+ */
+export async function insertJobWithDedup(job: NewJobInput): Promise<JobRecord> {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error("You must be logged in to add a job.");
-  }
-
-  const { data, error } = await supabase
-    .from("jobs")
-    .insert({ ...job, user_id: user.id })
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc("create_job_if_not_duplicate", {
+    p_address: job.address,
+    p_latitude: job.latitude,
+    p_longitude: job.longitude,
+    p_date: job.date,
+    p_time_slot_type: job.time_slot_type,
+    p_specific_time: job.specific_time,
+    p_customer_name: job.customer_name,
+    p_description: job.description,
+    p_duration_minutes: job.duration_minutes,
+    p_urgency: job.urgency,
+  });
 
   if (error) {
     throw new Error(`Failed to save job: ${error.message}`);
   }
 
-  return data;
+  return data as JobRecord;
 }
 
 export interface UpdateJobInput extends NewJobInput {
@@ -350,21 +394,43 @@ export interface UpdateJobInput extends NewJobInput {
   manual_position?: number | null;
 }
 
+/** Thrown when the job either never existed, isn't the caller's own, or
+ *  was deleted/moved out from under a concurrent edit (e.g. the same job
+ *  open in two tabs) — a genuine race, not a bug, so callers should show
+ *  a clean "that job no longer exists" message rather than a crash. */
+export class JobNotFoundError extends Error {}
+
 export async function updateJob(
   id: string,
   updates: UpdateJobInput
 ): Promise<JobRecord> {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new JobNotFoundError("You must be logged in to update a job.");
+  }
+
+  // Explicit user_id filter as a backstop alongside RLS, same reasoning
+  // as getJobById/getAllJobsForCurrentUser — and .maybeSingle() instead of
+  // .single() so a row that's gone (deleted in another tab moments
+  // earlier) returns a clean, catchable result instead of .single()'s
+  // uncaught throw on zero rows.
   const { data, error } = await supabase
     .from("jobs")
     .update(updates)
     .eq("id", id)
+    .eq("user_id", user.id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw new Error(`Failed to update job: ${error.message}`);
+  }
+  if (!data) {
+    throw new JobNotFoundError("That job no longer exists.");
   }
 
   return data;

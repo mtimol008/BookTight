@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Page not found",
+};
 
 // A plain Server Component — notFound() calls and genuinely unmatched
 // routes both render this with no client-side error to catch, so there's

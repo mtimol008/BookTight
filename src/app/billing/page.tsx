@@ -48,6 +48,13 @@ export default async function BillingPage({
     !subscription.stripe_subscription_id &&
     new Date(subscription.trial_ends_at) > new Date();
 
+  // Distinct from "never had a trial at all" (trial_ends_at is null) —
+  // both used to render as the same generic "No active subscription.",
+  // which reads as though the account never started, when it may well
+  // have had a trial that simply ran out.
+  const trialEnded =
+    !trialActive && !!subscription.trial_ends_at && !subscription.stripe_subscription_id;
+
   return (
     <AppShell>
       <div className="screen-head">
@@ -105,6 +112,10 @@ export default async function BillingPage({
             {trialActive ? (
               <p>
                 Free trial — ends <strong>{formatDate(subscription.trial_ends_at!)}</strong>.
+              </p>
+            ) : trialEnded ? (
+              <p>
+                Your trial ended on <strong>{formatDate(subscription.trial_ends_at!)}</strong>.
               </p>
             ) : (
               <p>No active subscription.</p>

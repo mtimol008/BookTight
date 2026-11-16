@@ -54,6 +54,13 @@ export interface DaySuggestionPanelProps {
   /** The job's current date when keeping it is still a real option (the
    *  edit flow), or null when it isn't (rescheduling a day that's gone). */
   currentDate: string | null;
+  /** A date the host already knows the user wants — e.g. typed directly
+   *  into a date field before this panel ever appeared — which should be
+   *  what's initially selected (as if typed into "Different date" below)
+   *  instead of silently falling back to currentDate or the engine's own
+   *  top pick. null/omitted when there's no such date (the host's own
+   *  date field wasn't touched, or there isn't one). */
+  initialCustomDate?: string | null;
   /** Route info for currentDate when it isn't among the ranked candidates
    *  — e.g. it has already passed, so it was filtered out. */
   currentDateInfo: DayRoute | null;
@@ -86,6 +93,7 @@ export function DaySuggestionPanel({
   requestedTime,
   durationMinutes,
   currentDate,
+  initialCustomDate = null,
   currentDateInfo,
   requestedTimeLabel,
   timeControl,
@@ -153,23 +161,39 @@ export function DaySuggestionPanel({
     const isNewRanking = rankingIdentityRef.current !== rankingIdentity;
     rankingIdentityRef.current = rankingIdentity;
 
+    // A date the host already knows the user wants takes priority over
+    // defaulting back to the job's current date or the engine's own top
+    // pick — otherwise this panel would silently confirm a day the user
+    // never actually chose. Only counts when it's genuinely different
+    // from currentDate, so the "keep it" path is untouched.
+    const requestedCustomDate =
+      initialCustomDate && initialCustomDate !== currentDate ? initialCustomDate : null;
+
     // When not resetting, keep refreshing whatever day is already
     // selected — timeSuggestionRequestRef always holds that, kept in sync
     // both by this effect's own resets and by explicit day switches
     // (selectDay/refreshTimeSuggestionFor), so it's accurate either way.
     const targetDate = isNewRanking
-      ? currentDate ?? suggestion.suggestion.day.date
+      ? requestedCustomDate ?? currentDate ?? suggestion.suggestion.day.date
       : timeSuggestionRequestRef.current;
 
     if (isNewRanking) {
       setSelectedDateRaw(targetDate);
       setCandidateIndex(0);
-      setCustomDate("");
+      setCustomDate(requestedCustomDate ?? "");
       setCustomDateInfo(null);
       setCustomDateError(null);
-      customDateRequestRef.current = "";
+      customDateRequestRef.current = requestedCustomDate ?? "";
       setWarningDay(null);
       setAcceptTimeSuggestion(false);
+
+      if (requestedCustomDate) {
+        if (requestedCustomDate < getTodayDateString()) {
+          setCustomDateError("Pick a date that hasn't already passed.");
+        } else {
+          fetchCustomDateInfo(requestedCustomDate);
+        }
+      }
     }
     timeSuggestionRequestRef.current = targetDate;
 
@@ -202,7 +226,34 @@ export function DaySuggestionPanel({
     return () => {
       cancelled = true;
     };
-  }, [suggestion, currentDate, jobId, durationMinutes, panelRequestedTime]);
+    // fetchCustomDateInfo is a plain function, a new reference every
+    // render — listing it would re-run this effect on every render rather
+    // than only when one of the values above actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestion, currentDate, jobId, durationMinutes, panelRequestedTime, initialCustomDate]);
+
+  // Shared by the initial-ranking effect (a host-supplied initialCustomDate)
+  // and handleCustomDateChange (the user typing into "Different date") —
+  // both are "fetch this specific day's route info" with the same
+  // stale-request guard.
+  function fetchCustomDateInfo(value: string) {
+    customDateRequestRef.current = value;
+    startCheckingCustomDate(async () => {
+      const result = await getDayRouteInfo(
+        suggestion.coordinates,
+        panelRequestedTime,
+        value,
+        jobId,
+        durationMinutes
+      );
+      if (customDateRequestRef.current !== value) return;
+      if (!result.ok) {
+        setCustomDateError(result.error);
+        return;
+      }
+      setCustomDateInfo(result.data);
+    });
+  }
 
   function setSelectedDate(date: string) {
     setSelectedDateRaw(date);
@@ -301,33 +352,12 @@ export function DaySuggestionPanel({
 
     if (value) {
       selectDay(value);
+      fetchCustomDateInfo(value);
     } else {
       // Cleared the manual date — fall back to a day that's still on
       // screen, rather than leaving an invisible one as what gets saved.
       selectDay(currentDate ?? activeCandidate?.date ?? suggestion.suggestion.day.date);
     }
-
-    if (!value) return;
-
-    startCheckingCustomDate(async () => {
-      const result = await getDayRouteInfo(
-        suggestion.coordinates,
-        {
-          type: requestedTime.type,
-          specificTime:
-            requestedTime.type === "specific" ? requestedTime.specificTime : undefined,
-        },
-        value,
-        jobId,
-        durationMinutes
-      );
-      if (customDateRequestRef.current !== value) return;
-      if (!result.ok) {
-        setCustomDateError(result.error);
-        return;
-      }
-      setCustomDateInfo(result.data);
-    });
   }
 
   function getSelectedDayInfo(): DayRoute | undefined {
