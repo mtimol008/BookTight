@@ -1,4 +1,5 @@
 import { LandingScreenshot } from "@/components/LandingScreenshot";
+import { VisitTracker } from "@/components/VisitTracker";
 import Link from "next/link";
 
 const CHECK_PATH = "M4 12.5l5.5 5.5L20 7";
@@ -182,6 +183,7 @@ function RouteMap({ tidy, label }: { tidy: boolean; label: string }) {
 export function LandingPage() {
   return (
     <div className="landing-body">
+      <VisitTracker path="/" />
       <a className="landing-skip" href="#main">
         Skip to content
       </a>

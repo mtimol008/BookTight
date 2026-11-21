@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SignUpForm } from "@/components/SignUpForm";
+import { VisitTracker } from "@/components/VisitTracker";
 import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 export default function SignUpPage() {
   return (
     <main className="shell shell--bare">
+      <VisitTracker path="/signup" />
       <h1 className="sr-only">Sign up</h1>
       <div style={{ textAlign: "center", marginBottom: 28 }}>
         <div className="wordmark wordmark--lg">Booktight</div>

@@ -27,7 +27,7 @@ export default function PrivacyPage() {
       <div className="card" style={{ maxWidth: 560, margin: "0 auto" }}>
         <h1 className="screen-title" style={{ marginBottom: 10 }}>Privacy Policy</h1>
         <p className="legal-meta">
-          Last updated: 6 November 2026 &middot; Version: {TERMS_VERSION}
+          Last updated: 21 November 2026 &middot; Version: {TERMS_VERSION}
         </p>
 
         <div className="legal-doc">
@@ -80,6 +80,14 @@ export default function PrivacyPage() {
             d) <strong>Payments (once paid plans start):</strong> handled by Stripe. We receive
             your subscription status and identifiers, not your full card number.
           </p>
+          <p>
+            e) <strong>Anonymous visit counts:</strong> we count how many browsers reach the
+            landing page and the sign-up page, grouped only by day, page, the optional{" "}
+            <code>?ref=</code> link label and a coarse mobile/desktop bucket. Each group is just
+            a number in a daily total. We do not store your IP address, user-agent, cookies,
+            browser storage, session or any identifier with it, and these counts cannot be linked
+            back to you.
+          </p>
 
           <h2>4. Why we use it, and our legal basis</h2>
           <ul>
@@ -93,6 +101,11 @@ export default function PrivacyPage() {
             <li>
               Security, stopping bots and abuse, rate limiting and error monitoring:{" "}
               <strong>legitimate interests</strong> (keeping the service safe and working).
+            </li>
+            <li>
+              Anonymous page totals, to see which pages and referral links get used:{" "}
+              <strong>legitimate interests</strong> (understanding and improving the site). These
+              totals contain no personal data.
             </li>
             <li>
               Account emails such as confirmation, password reset and service notices:{" "}
@@ -156,7 +169,8 @@ export default function PrivacyPage() {
             We use only essential cookies: a sign-in session cookie from our authentication
             provider, and a security cookie from Cloudflare Turnstile on the sign-up, sign-in and
             password-reset pages. We use no analytics or advertising cookies, so there is no
-            cookie banner. If that changes, we will ask first.
+            cookie banner. The anonymous visit counts above use no cookies or browser storage
+            either &mdash; just one short request from the page. If that changes, we will ask first.
           </p>
           <p>
             <strong>Calendar feed:</strong> if you turn on the calendar feed, we create a private
@@ -187,6 +201,11 @@ export default function PrivacyPage() {
             <li>
               <strong>Security counters (such as rate-limit records):</strong> kept for a short
               period.
+            </li>
+            <li>
+              <strong>Anonymous visit counts:</strong> kept only as daily totals (day, page, link
+              label, device and count). They contain no personal data and are not linked to
+              anyone.
             </li>
             <li>
               <strong>Billing records:</strong> for as long as tax law requires.

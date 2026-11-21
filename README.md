@@ -105,6 +105,20 @@ npm run backup
 
 Saves one JSON file per table, plus `auth_users.json`, to a new timestamped folder under `~/Desktop/booktight-backups/` (same folder earlier manual backups already used). Run it regularly — weekly is reasonable at this scale — and keep the resulting folder somewhere that isn't just this one computer (a second drive, cloud storage). See `scripts/backup-database.mjs`'s own comments for the override env var and exactly what it covers.
 
+### Anonymous visit counts
+
+The signed-out landing page and `/signup` fire one small JavaScript beacon to
+`POST /api/visits` (no cookies, no browser storage, no IP or user-agent saved,
+no personal data). Counts are stored as daily totals in `public.page_visits`,
+bucketed only by UTC day, path, normalised `?ref=` label and coarse
+mobile/desktop width. Bots that don't run JavaScript are not counted; the
+route also requires same-origin Fetch headers. To see the totals, run this in
+the Supabase SQL Editor (or with a service-role client):
+
+```sql
+select * from public.page_visit_counts order by visit_date desc;
+```
+
 ### Before switching anything on: check the legal pages still match reality
 
 `src/app/terms/page.tsx` and `src/app/privacy/page.tsx` both carry a comment at the top of the file for this reason: re-read any claim about backups, uptime, or a hosting region against whatever plan tier is *actually* running that day — not a tier that would be nice to have. (A backup-retention promise in Privacy section 8 was found inaccurate for exactly this reason once, and fixed — see that section for the current, accurate wording.) Do this check again before switching on the paywall, and again before going live, since both are moments the business is making a bigger promise to more people.

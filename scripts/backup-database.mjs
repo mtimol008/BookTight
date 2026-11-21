@@ -39,6 +39,7 @@ const TABLES = [
   "geocode_usage",
   "ip_rate_limit",
   "analytics_events",
+  "page_visits",
 ];
 
 const PAGE_SIZE = 1000;

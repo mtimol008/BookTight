@@ -20,6 +20,7 @@
     "test:password-reset": "tsx --env-file=.env.local scripts/test-password-reset.ts",
     "test:password-reset-request": "tsx scripts/test-password-reset-request.ts",
     "test:ical-summary": "tsx scripts/test-ical-summary.ts",
+    "test:visits": "tsx --env-file=.env.local scripts/test-visits.ts",
     "screenshots:seed": "node --env-file=.env.local scripts/landing-screenshots/seed.mjs",
     "screenshots:capture": "node --env-file=.env.local scripts/landing-screenshots/capture.mjs",
     "screenshots:cleanup": "node --env-file=.env.local scripts/landing-screenshots/cleanup.mjs"

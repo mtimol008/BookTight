@@ -9,6 +9,8 @@ const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
 // directions — e.g. the .ics calendar feed, which Apple/Google/Outlook
 // fetch with no Supabase session at all, and which a logged-in user should
 // still be able to open directly (e.g. the "Test in Browser" link).
+// /api/visits belongs here because the anonymous beacon fires from the
+// signed-out landing page and /signup; it stores no session or identifier.
 // /email-confirmed belongs here too: it's the page Supabase's confirmation
 // link lands on, reached by a brand-new user who by definition isn't
 // signed in yet — without it, the login gate bounced them straight to
@@ -21,6 +23,7 @@ const PUBLIC_PATHS = [
   ...AUTH_PAGES,
   "/api/calendar/feed",
   "/api/health",
+  "/api/visits",
   "/api/csp-report",
   "/email-confirmed",
   "/reset-password",
